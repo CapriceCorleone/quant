@@ -9,6 +9,7 @@ from pathlib import Path
 PATH_ROOT = Path('E:/quant/')
 PATH_DATA = PATH_ROOT / 'data'
 PATH_DATA_BASIC = PATH_DATA / 'basic'  # 基础数据
+PATH_DATA_BASIC_PROCESSED = PATH_DATA / 'basic_processed'  # 处理后的基础数据
 
 PATH_FACTOR_TEST = PATH_ROOT / 'factor_test'  # 因子回测框架
 PATH_PORTFOLIO_TEST = PATH_ROOT / 'portfolio_test'  # 组合回测框架

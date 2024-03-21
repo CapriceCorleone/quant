@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-20 22:38:17
-LastEditTime: 2024-03-20 22:52:43
+LastEditTime: 2024-03-21 20:19:33
 '''
 
 import os
@@ -61,3 +61,8 @@ class DataLoader:
                 if 'Quote' not in dir_path or 'Book' not in dir_path:
                     for n in file_names:
                         print('\t' + n)
+
+
+if __name__ == "__main__":
+    dl = DataLoader()
+    AShareCalendar = dl.load('AShareCalendar')
