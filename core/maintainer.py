@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-21 20:42:06
-LastEditTime: 2024-03-21 21:04:27
+LastEditTime: 2024-03-21 22:09:42
 '''
 
 import os
@@ -50,18 +50,22 @@ class DataMaintainer:
             init_date = self.aligner.trade_dates[bisect_left(self.aligner.trade_dates[:-self.roll_back], init_date)]
         AShareEODPrices = self.dl.load('AShareEODPrices').loc[str(init_date):]
         stock_quote = {
-            'open': AShareEODPrices.S_DQ_OPEN.unstack(),
-            'high': AShareEODPrices.S_DQ_HIGH.unstack(),
-            'low': AShareEODPrices.S_DQ_LOW.unstack(),
-            'close': AShareEODPrices.S_DQ_CLOSE.unstack(),
-            'pctchg': AShareEODPrices.S_DQ_PCTCHANGE.unstack() / 100,
-            'volume': AShareEODPrices.S_DQ_VOLUME.unstack(),
-            'amount': AShareEODPrices.S_DQ_AMOUNT.unstack(),
+            'open':      AShareEODPrices.S_DQ_OPEN.unstack(),
+            'high':      AShareEODPrices.S_DQ_HIGH.unstack(),
+            'low':       AShareEODPrices.S_DQ_LOW.unstack(),
+            'close':     AShareEODPrices.S_DQ_CLOSE.unstack(),
+            'pctchg':    AShareEODPrices.S_DQ_PCTCHANGE.unstack() / 100,
+            'volume':    AShareEODPrices.S_DQ_VOLUME.unstack(),
+            'amount':    AShareEODPrices.S_DQ_AMOUNT.unstack(),
             'adjfactor': AShareEODPrices.S_DQ_ADJFACTOR.unstack(),
         }
-        old = pd.read_pickle(conf.PATH_DATA_BASIC_PROCESSED / 'stock_quote.pkl')
-        stock_quote = {k: self.aligner.append(old[k], format_unstack_table(v)) for k, v in stock_quote.items()}
-        with open(conf.PATH_DATA_BASIC_PROCESSED / 'stock_quote.pkl', 'wb') as file:
+        path = conf.PATH_DATA_BASIC_PROCESSED / 'stock_quote.pkl'
+        if path.exists():
+            old = pd.read_pickle(path)
+            stock_quote = {k: self.aligner.append(old[k], format_unstack_table(v)) for k, v in stock_quote.items()}
+        else:
+            stock_quote = {k: self.aligner.align(format_unstack_table(v)) for k, v in stock_quote.items()}
+        with open(path, 'wb') as file:
             pickle.dump(stock_quote, file)
     
     def update_stock_size(self, init_date: int = None) -> None:
@@ -76,10 +80,44 @@ class DataMaintainer:
             'total_share': AShareEODDerivativeIndicator.TOT_SHR_TODAY.unstack() * 10000,      # 股
             'float_share': AShareEODDerivativeIndicator.FLOAT_A_SHR_TODAY.unstack() * 10000,  # 股
         }
-        old = pd.read_pickle(conf.PATH_DATA_BASIC_PROCESSED / 'stock_size.pkl')
-        stock_size = {k: self.aligner.append(old[k], format_unstack_table(v)) for k, v in stock_size.items()}
-        with open(conf.PATH_DATA_BASIC_PROCESSED / 'stock_size.pkl', 'wb') as file:
+        path = conf.PATH_DATA_BASIC_PROCESSED / 'stock_size.pkl'
+        if path.exists():
+            old = pd.read_pickle(path)
+            stock_size = {k: self.aligner.append(old[k], format_unstack_table(v)) for k, v in stock_size.items()}
+        else:
+            stock_size = {k: self.aligner.align(format_unstack_table(v)) for k, v in stock_size.items()}
+        with open(path, 'wb') as file:
             pickle.dump(stock_size, file)
+
+    def update_index_quote(self, init_date: int = None) -> None:
+        if init_date is None:
+            init_date = self.aligner.trade_dates[-self.roll_back]
+        else:
+            init_date = self.aligner.trade_dates[bisect_left(self.aligner.trade_dates[:-self.roll_back], init_date)]
+        AIndexEODPrices = self.dl.load('AIndexEODPrices').loc[str(init_date):]
+        index_quote = {
+            'open':   AIndexEODPrices.S_DQ_OPEN.unstack(),
+            'high':   AIndexEODPrices.S_DQ_HIGH.unstack(),
+            'low':    AIndexEODPrices.S_DQ_LOW.unstack(),
+            'close':  AIndexEODPrices.S_DQ_CLOSE.unstack(),
+            'pctchg': AIndexEODPrices.S_DQ_PCTCHANGE.unstack() / 100,
+            'volume': AIndexEODPrices.S_DQ_VOLUME.unstack(),
+            'amount': AIndexEODPrices.S_DQ_AMOUNT.unstack(),
+        }
+        path = conf.PATH_DATA_BASIC_PROCESSED / 'index_quote.pkl'
+        for k, v in index_quote.items():
+            v.index = v.index.astype(int)
+            v = v.reindex(index=self.aligner.trade_dates)
+            index_quote[k] = v
+        if path.exists():
+            old = pd.read_pickle(path)
+            for k, v in index_quote.items():
+                o = old[k]
+                o = o[o.index < v.index.min()]
+                v = pd.concat([o, v], axis=0)
+                index_quote[k] = v
+        with open(path, 'wb') as file:
+            pickle.dump(index_quote, file)
 
 
 if __name__ == "__main__":
@@ -88,3 +126,4 @@ if __name__ == "__main__":
     dm.update_stock_description()
     dm.update_stock_quote()
     dm.update_stock_size()
+    dm.update_index_quote()
