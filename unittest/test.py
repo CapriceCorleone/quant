@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-21 20:25:56
-LastEditTime: 2024-03-23 17:42:09
+LastEditTime: 2024-03-24 00:31:06
 '''
 
 import os
@@ -13,8 +13,9 @@ sys.path.append('E:/')
 import pandas as pd
 
 
-from quant.core import DataLoader, DataMaintainer, Universe, Calendar, format_unstack_table, orthogonalize, orthogonalize_monthend
+from quant.core import DataLoader, DataMaintainer, Universe, Calendar, format_unstack_table, winsorize_mad, stdd_zscore, orthogonalize, orthogonalize_monthend
 from quant.factor_test import FactorTester
+from quant.risk_model import RiskModelManager
 
 
 if __name__ == "__main__":
@@ -47,7 +48,6 @@ if __name__ == "__main__":
     calendar = Calendar()
     print(calendar.to_frame())
     month_ends = calendar.month_ends
-    
 
     # Factor Tester
     factor = pd.read_pickle('D:/peiyq/民生/状态波动率/data/factor/processed/rvol_c2c/rvol_c2c_vstd20.pkl')
@@ -57,7 +57,16 @@ if __name__ == "__main__":
     universe = univ(listed_days=120, continuous_trade_days=20, include_st=False, include_suspend=False, include_price_limit=False)
     ft = FactorTester(universe, 'M', 20161230, 20231229, 'vwap')
 
-    factor_orth = orthogonalize(factor, *list(map(lambda x: ft.risk_model[x], ['lncap'] + ft.RISK_INDUSTRY_FACTORS)))
-    factor_orth = orthogonalize_monthend(factor, *list(map(lambda x: ft.risk_model[x], ['lncap'] + ft.RISK_INDUSTRY_FACTORS)))
+    factor_stan = stdd_zscore(winsorize_mad(factor))
+
+    factor_orth = orthogonalize(factor_stan, *list(map(lambda x: ft.risk_model[x], ['lncap'] + ft.RISK_INDUSTRY_FACTORS)))
+    factor_orth = orthogonalize_monthend(factor_stan, *list(map(lambda x: ft.risk_model[x], ['lncap'] + ft.RISK_INDUSTRY_FACTORS)))
 
     output = ft.test(factor_orth, 10, True)
+
+    # Risk Model
+    rmm = RiskModelManager('./risk_model/structure.yaml', init_date=20231101)
+    factor = rmm.calc_factor(rmm.structure[1]['subfactors'][0])
+    factor = rmm.calc_risk_subfactor(rmm.structure[1]['subfactors'][0])
+    factor = rmm.calc_risk_factor(rmm.structure[1])
+    factor = rmm.calc_exposure()

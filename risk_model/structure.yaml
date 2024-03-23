@@ -1,0 +1,65 @@
+- name: "market"
+  type: "market"
+  process: null
+
+- name: "size"
+  type: "style"
+  subfactors:
+    - name: "size_sub"
+      universe: null
+      weight: null
+      num_process: null
+      formulas: !!python/name:quant.risk_model.formulas.size_sub
+      process:
+        - !!python/name:quant.risk_model.tools.winsorize_box
+        - !!python/name:quant.risk_model.tools.weighted_stdd_zscore
+
+- name: "beta"
+  type: "style"
+  subfactors:
+    - name: "beta_sub"
+      universe: "universe"
+      weight: "weight"
+      num_process: 8
+      formulas: !!python/name:quant.risk_model.formulas.beta_sub
+      kwargs:
+        window: 243
+        min_periods: 122
+        half_life: 122
+        raito: 0.5
+      process:
+        - !!python/name:quant.risk_model.tools.winsorize_box
+        - !!python/name:quant.risk_model.tools.weighted_stdd_zscore
+
+- type: "industry"
+  name:
+    - "交通运输"
+    - "传媒"
+    - "农林牧渔"
+    - "医药"
+    - "商贸零售"
+    - "国防军工"
+    - "基础化工"
+    - "家电"
+    - "建材"
+    - "建筑"
+    - "房地产"
+    - "有色金属"
+    - "机械"
+    - "汽车"
+    - "消费者服务"
+    - "煤炭"
+    - "电力及公用事业"
+    - "电力设备及新能源"
+    - "电子"
+    - "石油石化"
+    - "纺织服装"
+    - "综合"
+    - "综合金融"
+    - "计算机"
+    - "轻工制造"
+    - "通信"
+    - "钢铁"
+    - "银行"
+    - "非银行金融"
+    - "食品饮料"

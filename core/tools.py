@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-21 20:42:41
-LastEditTime: 2024-03-23 18:14:16
+LastEditTime: 2024-03-23 22:52:30
 '''
 
 import numpy as np
@@ -22,6 +22,26 @@ def format_unstack_table(data: pd.DataFrame) -> pd.DataFrame:
         data.index = data.index.astype(int)
     data.index.name, data.columns.name = 'trade_date', 'ticker'
     return data
+
+
+def winsorize_mad(data: pd.DataFrame) -> pd.DataFrame:
+    median = data.median(axis=1).values
+    mad = np.abs(data - median[:, None]).median(axis=1).values
+    ix = (median == 0) & (mad == 0)
+    if ix.any():
+        # 0值太多，更改mad
+        data_ = data.copy()
+        data_[data == 0] = np.nan
+        mad_ = np.abs(data - median[:, None]).median(axis=1).values
+        mad[ix] = mad_[ix]
+    lower = median - 3 * 1.483 * mad
+    upper = median + 3 * 1.483 * mad
+    data = data.clip(lower, upper, axis=0)
+    return data
+
+
+def stdd_zscore(data: pd.DataFrame) -> pd.DataFrame:
+    return (data - data.mean(axis=1).values[:, None]) / (data.std(axis=1).values[:, None] + 1e-8)
 
 
 def __orthogonalize(y, X, universe, weight, do_orth):
