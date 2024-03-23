@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-20 22:36:50
-LastEditTime: 2024-03-21 22:49:55
+LastEditTime: 2024-03-23 14:50:31
 '''
 
 import os
@@ -17,8 +17,6 @@ from ..core import DataLoader, Universe, Calendar, Aligner
 
 plt.rcParams['font.sans-serif'] = ['Microsoft YaHei']  # 设置中文显示
 plt.rcParams['axes.unicode_minus'] = False  # 解决负号显示为方块的问题
-
-
 
 
 class FactorTester:
@@ -41,9 +39,12 @@ class FactorTester:
         '综合金融', '计算机', '轻工制造', '通信', '钢铁', '银行', '非银行金融', '食品饮料'
     ]
     
-    def __init__(self, universe: Universe, frequency: str, start_date: int, end_date: int, deal_price: str = 'close') -> None:
+    def __init__(self, universe: Universe, frequency: str, start_date: int, end_date: int, deal_price: str = 'preclose') -> None:
         self.dl = DataLoader(save=False)
         self.universe = universe
+        self.frequency = frequency
+        self.start_date = start_date
+        self.end_date = end_date
         self.calendar = Calendar()
         self.aligner = Aligner()
         self.trade_dates = self.aligner.trade_dates
@@ -57,6 +58,16 @@ class FactorTester:
             'stock_quote': self.dl.load('stock_quote'),
             'index_quote': self.dl.load('index_quote')
         }
+        self.stock_adjopen = self.basic_set['stock_quote']['open'] * self.basic_set['stock_quote']['adjfactor']
+        self.stock_adjclose = self.basic_set['stock_quote']['close'] * self.basic_set['stock_quote']['adjfactor']
+        self.stock_close_return = self.stock_adjclose / self.stock_adjclose.shift(1) - 1
+        self.stock_open_return  =self.stock_adjopen / self.stock_adjclose.shift(1) - 1
+        if self.deal_price in ['open', 'vwap', 'close']:
+            self.stock_deal_price = self.basic_set['stock_quote'][self.deal_price] * self.basic_set['stock_quote']['adjfactor']
+            self.stock_sell_return = self.stock_deal_price / self.stock_adjclose.shift(1) - 1
+            self.stock_buy_return = self.stock_adjclose / self.stock_deal_price - 1
+        else:
+            self.stock_deal_price = self.stock_adjclose.shift(1)
 
     def _prepare_risk_model(self) -> None:
         self.risk_model = {}
@@ -101,42 +112,44 @@ class FactorTester:
         for i in range(ngroups):
             groups.append(tks[n * i : n * (i + 1)])
         return groups
-
-    def calc_portfolio_return_and_turnover(self, holding, weight):
+    
+    def calc_portfolio_return_and_turnover(self, holding):
         rebal_dates = np.array(sorted(list(holding.keys())))
         next_rebal_dates = np.array([self.calendar.get_next_trade_date(i) for i in rebal_dates])
         daily_return = {}
         daily_turnover = {}
         for i in range(len(self.trade_dates)):
             day = self.trade_dates[i]
-            if day < rebal_dates[0] or day > rebal_dates[-1]:
+            if day < rebal_dates[0] or day > self.end_date:
                 continue
             if day == rebal_dates[0]:
                 daily_return[day] = 0
                 daily_turnover[day] = np.nan
-                lst_p, lst_w = None, None
+                lst_p, lst_w = None
                 continue
             last_rebal_date = rebal_dates[rebal_dates < day][-1]
             if day in next_rebal_dates:
                 cur_p = holding[last_rebal_date]
-                cur_w = weight[last_rebal_date]
-                stock_ret = self.stock_daily_returns.loc[day, cur_p].fillna(0).values  # TODO
-                ret = (stock_ret * cur_w).sum()
-                if lst_p is None:
+                cur_w = np.ones(len(cur_p)) / len(cur_p)
+                if day == next_rebal_dates[0]:
+                    # 第一个调仓日：以昨收盘价买入
+                    ret = (self.stock_close_return.loc[day, cur_p].fillna(value=0).values * cur_w).sum()
                     turn = np.nan
                 else:
-                    joint_tks = np.unique(lst_p.tolist() + cur_p.tolist())
-                    lst_pw = dict(zip(lst_p, lst_w))
-                    cur_pw = dict(zip(cur_p, cur_w))
-                    turn = sum([np.abs(lst_pw.get(j, 0) - cur_pw.get(j, 0)) for j in joint_tks])
-                cur_w = cur_w * (1 + stock_ret)
-                cur_w = cur_w / cur_w.sum()
-                lst_p = cur_p
-                lst_w = cur_w
-            else:
-                stock_ret = self.stock_daily_returns.loc[day, lst_p].fillna(0).values
-                ret = (stock_ret * lst_w).sum()
-                turn = np.nan
-            daily_return[day] = ret
-            daily_turnover[day] = turn
-        return daily_return, daily_turnover
+                    # 不是第一个调仓日：按照deal_price类型进行调仓
+                    cross_p = np.unique(lst_p.tolist() + cur_p.tolist())
+                    lst_p2w = dict(zip(lst_p, lst_w))
+                    cur_p2w = dict(zip(cur_p, cur_w))
+                    turn = sum([np.abs(lst_p2w.get(j, 0) - cur_p2w.get(j, 0)) for j in cross_p])
+                    if self.deal_price == 'preclose':
+                        # 以昨收盘价调仓
+                        ret = (self.stock_close_return.loc[day, cur_p].fillna(value=0).values * cur_w).sum()
+                    else:
+                        # 不是以昨收盘价调仓
+                        ret_sell = (self.stock_sell_return.loc[day, lst_p].fillna(value=0).values * lst_w).sum()
+                        ret_buy = (self.stock_buy_return.loc[day, cur_p].fillna(value=0).values * cur_w).sum()
+                        ret = (1 + ret_sell) * (1 + ret_buy) - 1
+                daily_return[day] = ret
+                daily_turnover[day] = turn
+            return daily_return, daily_turnover
+                    

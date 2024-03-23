@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-21 20:25:56
-LastEditTime: 2024-03-21 22:08:56
+LastEditTime: 2024-03-23 14:51:50
 '''
 
 import os
@@ -11,17 +11,19 @@ import sys
 sys.path.append('E:/')
 
 
+from quant.core import DataLoader, DataMaintainer, Universe, Calendar
+from quant.factor_test import FactorTester
+
+
 if __name__ == "__main__":
     
     # DataLoader
-    from quant.core import DataLoader
     dl = DataLoader()
     AShareCalendar = dl.load('AShareCalendar')
 
     # DataMaintainer
     #  full time: 20-40 seconds
     #  increment time: 3-5 seconds
-    from quant.core import DataMaintainer
     dm = DataMaintainer()
     dm.update_index()
     dm.update_stock_description()
@@ -31,7 +33,6 @@ if __name__ == "__main__":
     
     # Universe
     #  full time: 3-5 seconds
-    from quant.core import Universe
     univ = Universe()
     market_univ = univ(listed_days=120, continuous_trade_days=20, include_st=False, include_suspend=False, include_price_limit=False)
     hs300_univ = univ(listed_days=120, continuous_trade_days=20, include_st=False, include_suspend=False, include_price_limit=False, index_code='000300.SH')
@@ -41,10 +42,11 @@ if __name__ == "__main__":
     df = univ._format_universe(univ.arrange_info_table(info))
 
     # Calendar
-    from quant.core import Calendar
     calendar = Calendar()
     print(calendar.to_frame())
     month_ends = calendar.month_ends
     
 
-    
+    # Factor Tester
+    universe = univ(listed_days=120, continuous_trade_days=20, include_st=False, include_suspend=False, include_price_limit=False)
+    ft = FactorTester(universe, 'M', 20161230, 20231229, 'vwap')

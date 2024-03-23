@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-21 20:42:06
-LastEditTime: 2024-03-21 22:09:42
+LastEditTime: 2024-03-22 20:56:36
 '''
 
 import os
@@ -54,6 +54,7 @@ class DataMaintainer:
             'high':      AShareEODPrices.S_DQ_HIGH.unstack(),
             'low':       AShareEODPrices.S_DQ_LOW.unstack(),
             'close':     AShareEODPrices.S_DQ_CLOSE.unstack(),
+            'vwap':      AShareEODPrices.S_DQ_AVGPRICE.unstack(),
             'pctchg':    AShareEODPrices.S_DQ_PCTCHANGE.unstack() / 100,
             'volume':    AShareEODPrices.S_DQ_VOLUME.unstack(),
             'amount':    AShareEODPrices.S_DQ_AMOUNT.unstack(),
