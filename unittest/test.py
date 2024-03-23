@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-21 20:25:56
-LastEditTime: 2024-03-23 14:51:50
+LastEditTime: 2024-03-23 17:42:09
 '''
 
 import os
@@ -10,8 +10,10 @@ os.chdir('E:/quant/')
 import sys
 sys.path.append('E:/')
 
+import pandas as pd
 
-from quant.core import DataLoader, DataMaintainer, Universe, Calendar
+
+from quant.core import DataLoader, DataMaintainer, Universe, Calendar, format_unstack_table, orthogonalize, orthogonalize_monthend
 from quant.factor_test import FactorTester
 
 
@@ -27,9 +29,9 @@ if __name__ == "__main__":
     dm = DataMaintainer()
     dm.update_index()
     dm.update_stock_description()
-    dm.update_stock_quote()
-    dm.update_stock_size()
-    dm.update_index_quote()
+    dm.update_stock_quote(20050101)
+    dm.update_stock_size(20050101)
+    dm.update_index_quote(20050101)
     
     # Universe
     #  full time: 3-5 seconds
@@ -48,5 +50,14 @@ if __name__ == "__main__":
     
 
     # Factor Tester
+    factor = pd.read_pickle('D:/peiyq/民生/状态波动率/data/factor/processed/rvol_c2c/rvol_c2c_vstd20.pkl')
+    factor = factor.pivot(index='trade_date', columns='ticker', values='factor')
+    factor = format_unstack_table(factor)
+
     universe = univ(listed_days=120, continuous_trade_days=20, include_st=False, include_suspend=False, include_price_limit=False)
     ft = FactorTester(universe, 'M', 20161230, 20231229, 'vwap')
+
+    factor_orth = orthogonalize(factor, *list(map(lambda x: ft.risk_model[x], ['lncap'] + ft.RISK_INDUSTRY_FACTORS)))
+    factor_orth = orthogonalize_monthend(factor, *list(map(lambda x: ft.risk_model[x], ['lncap'] + ft.RISK_INDUSTRY_FACTORS)))
+
+    output = ft.test(factor_orth, 10, True)

@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-20 22:38:17
-LastEditTime: 2024-03-21 20:19:33
+LastEditTime: 2024-03-23 14:53:05
 '''
 
 import os
@@ -18,7 +18,7 @@ class DataLoader:
     数据载入模块
     通过DataLoader.help来查询本地数据
     """
-    root = conf.path.PATH_DATA_BASIC
+    root = conf.path.PATH_DATA
 
     def __init__(self, save: bool = True) -> None:
         """

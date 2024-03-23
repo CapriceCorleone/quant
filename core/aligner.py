@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-21 20:36:55
-LastEditTime: 2024-03-21 20:54:28
+LastEditTime: 2024-03-23 16:45:37
 '''
 
 import numpy as np
@@ -21,8 +21,8 @@ class Aligner:
 
     def load_index(self) -> None:
         index = np.load(self.index_path, allow_pickle=True).item()
-        self.trade_dates = index['trade_date']
-        self.tickers = index['ticker']
+        self.trade_dates = index['trade_date'].astype(int)
+        self.tickers = index['ticker'].astype(int)
     
     def align(self, data: pd.DataFrame) -> pd.DataFrame:
         return data.reindex(index=self.trade_dates, columns=self.tickers)
