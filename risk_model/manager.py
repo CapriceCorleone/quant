@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-23 21:32:14
-LastEditTime: 2024-03-24 01:15:23
+LastEditTime: 2024-03-24 13:35:42
 '''
 
 import os
@@ -30,7 +30,7 @@ class RiskModelManager:
         self.univ = Universe()
         self.universe = self.univ(listed_days=122, include_st=False)
         self.tech_universe = self.univ(listed_days=63)
-        self.weight = self.dl.load('stock_size')['total_mv']
+        self.weight = self.dl.load('stock_size')['total_mv'] / 1e8
     
     def calc_factor(self, config, **kwargs):
         func = config['formulas']

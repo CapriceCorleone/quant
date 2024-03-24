@@ -26,7 +26,7 @@
         window: 243
         min_periods: 122
         half_life: 122
-        raito: 0.5
+        ratio: 0.5
       process:
         - !!python/name:quant.risk_model.tools.winsorize_box
         - !!python/name:quant.risk_model.tools.weighted_stdd_zscore

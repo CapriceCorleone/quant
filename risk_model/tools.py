@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-23 21:28:59
-LastEditTime: 2024-03-24 01:34:36
+LastEditTime: 2024-03-24 13:39:00
 '''
 
 import numpy as np
@@ -34,6 +34,9 @@ def winsorize_box(data: pd.DataFrame) -> pd.DataFrame:
 
 
 def weighted_stdd_zscore(data, weight):
+    mask = pd.isna(data) | pd.isna(weight)
+    data = data[~mask]
+    weight = weight[~mask]
     mean = (data * weight).sum(axis=1) / weight.sum(axis=1)
     std = data.std(axis=1)
     data = (data - mean.values[:, None]) / (std.values[:, None] + 1e-8)

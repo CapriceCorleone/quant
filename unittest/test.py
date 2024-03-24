@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-21 20:25:56
-LastEditTime: 2024-03-24 00:31:06
+LastEditTime: 2024-03-24 12:50:57
 '''
 
 import os
@@ -13,7 +13,7 @@ sys.path.append('E:/')
 import pandas as pd
 
 
-from quant.core import DataLoader, DataMaintainer, Universe, Calendar, format_unstack_table, winsorize_mad, stdd_zscore, orthogonalize, orthogonalize_monthend
+from quant.core import Aligner, DataLoader, DataMaintainer, Universe, Calendar, format_unstack_table, winsorize_mad, stdd_zscore, orthogonalize, orthogonalize_monthend
 from quant.factor_test import FactorTester
 from quant.risk_model import RiskModelManager
 
@@ -66,7 +66,6 @@ if __name__ == "__main__":
 
     # Risk Model
     rmm = RiskModelManager('./risk_model/structure.yaml', init_date=20231101)
-    factor = rmm.calc_factor(rmm.structure[1]['subfactors'][0])
-    factor = rmm.calc_risk_subfactor(rmm.structure[1]['subfactors'][0])
+    factor = rmm.calc_risk_subfactor(rmm.structure[2]['subfactors'][0])
     factor = rmm.calc_risk_factor(rmm.structure[1])
     factor = rmm.calc_exposure()

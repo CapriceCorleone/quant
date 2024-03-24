@@ -39,3 +39,7 @@ class Aligner:
             Trade dates : {self.trade_dates[0]} - {self.trade_dates[-1]}, total num = {len(self.trade_dates)}
             Tickers     : {self.tickers[0]} - {self.tickers[-1]}, total num = {len(self.tickers)}
         """
+    
+    @property
+    def shape(self) -> Tuple[int, int]:
+        return (len(self.trade_dates), len(self.tickers))
