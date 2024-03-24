@@ -129,6 +129,70 @@
       process:
         - !!python/name:quant.risk_model.tools.winsorize_box
         - !!python/name:quant.risk_model.tools.weighted_stdd_zscore
+    - name: "ivff"
+      universe: "tech_universe"
+      weight: null
+      formulas: !!python/name:quant.risk_model.formulas.ivff
+      kwargs:
+        window: 243
+        min_periods: 122
+        half_life: 122
+        ratio: 0.5
+      process:
+        - !!python/name:quant.risk_model.tools.winsorize_box
+        - !!python/name:quant.risk_model.tools.weighted_stdd_zscore
+  process:
+    - !!python/name:quant.risk_model.tools.winsorize_box
+    - !!python/name:quant.risk_model.tools.weighted_stdd_zscore
+
+- name: "value"
+  type: "style"
+  subfactors:
+    - name: "ep_ttm"
+      universe: null
+      weight: null
+      formulas: !!python/name:quant.risk_model.formulas.ep_ttm
+      process:
+        - !!python/name:quant.risk_model.tools.winsorize_box
+        - !!python/name:quant.risk_model.tools.weighted_stdd_zscore
+    - name: "bp"
+      universe: null
+      weight: null
+      formulas: !!python/name:quant.risk_model.formulas.bp
+      process:
+        - !!python/name:quant.risk_model.tools.winsorize_box
+        - !!python/name:quant.risk_model.tools.weighted_stdd_zscore
+  process:
+    - !!python/name:quant.risk_model.tools.winsorize_box
+    - !!python/name:quant.risk_model.tools.weighted_stdd_zscore
+
+- name: "growth"
+  type: "style"
+  subfactors:
+    - name: "delta_roe"
+      universe: null
+      weight: null
+      formulas: !!python/name:quant.risk_model.formulas.delta_roe
+      process:
+        - !!python/name:quant.risk_model.tools.winsorize_box
+        - !!python/name:quant.risk_model.tools.weighted_stdd_zscore
+    - name: "sales_growth"
+      universe: null
+      weight: null
+      formulas: !!python/name:quant.risk_model.formulas.sales_growth
+      process:
+        - !!python/name:quant.risk_model.tools.winsorize_box
+        - !!python/name:quant.risk_model.tools.weighted_stdd_zscore
+    - name: "na_growth"
+      universe: null
+      weight: null
+      formulas: !!python/name:quant.risk_model.formulas.na_growth
+      process:
+        - !!python/name:quant.risk_model.tools.winsorize_box
+        - !!python/name:quant.risk_model.tools.weighted_stdd_zscore
+  process:
+    - !!python/name:quant.risk_model.tools.winsorize_box
+    - !!python/name:quant.risk_model.tools.weighted_stdd_zscore
 
 - type: "industry"
   name:

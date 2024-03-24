@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-23 21:28:39
-LastEditTime: 2024-03-24 17:07:41
+LastEditTime: 2024-03-25 00:21:50
 '''
 
 import numpy as np
@@ -11,7 +11,14 @@ from tqdm import tqdm
 from numba import njit
 from scipy import stats
 
-from ..core import Aligner, Calendar, Universe, format_unstack_table
+from ..core import Aligner, Calendar, Universe, Processors, format_unstack_table
+from ..core.njit.financial import ffunc_last, ffunc_ttm, ffunc_mean, ffunc_yoy, ffunc_divide, ffunc_cagr
+
+
+def unstack_market_cap(AShareEODDerivativeIndicator: pd.DataFrame, init_date: int) -> pd.DataFrame:
+    df_market_cap = AShareEODDerivativeIndicator.loc[str(init_date):, 'S_VAL_MV'].unstack() * 1.0e4
+    df_market_cap.index = df_market_cap.index.astype(int)
+    return df_market_cap
 
 
 def exponential_weight(seq_len: int, half_life: int, dtype: np.dtype, ratio: float = 0.5):
@@ -52,6 +59,32 @@ def __time_series_regress(ydata, xdata, window, min_periods, weight_decay, unive
             output_beta[i, j] = beta[0]
             output_se2[i, j] = se2
     return output_beta, output_se2
+
+
+@njit
+def __multivariate_time_series_regress(ydata, xdata, window, min_periods, weight_decay, universe):
+    # assume that xdata has no NaN
+    output_resvol = np.zeros(ydata.shape) * np.nan
+    for i in range(len(ydata)):
+        if i < window - 1:
+            continue
+        yd = ydata[i - window + 1 : i + 1]
+        xd = xdata[i - window + 1 : i + 1]
+        for j in range(ydata.shape[1]):
+            if universe[i, j] == 0:
+                continue
+            y = yd[:, j]
+            mask = np.isnan(y)
+            if window - mask.sum() < min_periods:
+                continue
+            y = y[~mask]
+            x = xd[~mask]
+            x_ = np.append(x, np.ones((len(y), 1), dtype=x.dtype), axis=1)
+            x_T = x_.T
+            w = np.diag(weight_decay[~mask])
+            resid = y - x_ @ np.linalg.inv(x_T @ w @ x_) @ x_T @ w @ y
+            output_resvol[i, j] = resid.std()
+    return output_resvol
 
 
 def __rolling(x, window):
@@ -263,3 +296,70 @@ def min_ret(AShareEODPrices: pd.DataFrame, init_date: int, **kwargs) -> pd.DataF
     return factor.loc[init_date:]
 
 
+def ivff(AShareEODPrices: pd.DataFrame, FamaFrench3Factor: pd.DataFrame, init_date: int, **kwargs) -> pd.DataFrame:
+    window = kwargs['window']
+    min_periods = kwargs['min_periods']
+    half_life = kwargs['half_life']
+    ratio = kwargs['ratio']
+    universe = kwargs['universe']
+    aligner = Aligner()
+    calendar = Calendar()
+
+    start_date = calendar.get_prev_trade_date(init_date, window - 1)
+    stock_quote = AShareEODPrices.copy()
+    stock_quote.loc[stock_quote['S_DQ_TRADESTATUSCODE'] == 0, 'S_DQ_PCTCHANGE'] = np.nan
+    stock_return = aligner.align(format_unstack_table(stock_quote['S_DQ_PCTCHANGE'].unstack())).loc[start_date:]
+    index = stock_return.index
+    columns = stock_return.columns
+    stock_return = stock_return.values.astype(np.float32)
+    ff_factor = FamaFrench3Factor.set_index(['trade_date']).reindex(index=aligner.trade_dates).loc[start_date:].fillna(value=0).values.astype(np.float32)
+    weight_decay = exponential_weight(window, half_life, stock_return.dtype, ratio)
+    output_resvol = __multivariate_time_series_regress(stock_return, ff_factor, window, min_periods, weight_decay, universe.loc[start_date:].values)
+    factor = aligner.align(pd.DataFrame(output_resvol, index=index, columns=columns))
+    return factor.loc[init_date:]
+
+
+# %% Value
+def ep_ttm(AShareEODDerivativeIndicator: pd.DataFrame, AShareIncome: pd.DataFrame, init_date: int, **kwargs) -> pd.DataFrame:
+    def operator(x):
+        return ffunc_last(ffunc_ttm(x))
+    df_market_cap = unstack_market_cap(AShareEODDerivativeIndicator, init_date)
+    return Processors.value.process(df_market_cap, [AShareIncome], ['NET_PROFIT_EXCL_MIN_INT_INC'], operator, init_date)
+
+
+def bp(AShareEODDerivativeIndicator: pd.DataFrame, AShareBalanceSheet: pd.DataFrame, init_date: int, **kwargs) -> pd.DataFrame:
+    def operator(x):
+        return ffunc_last(x)
+    df_market_cap = unstack_market_cap(AShareEODDerivativeIndicator, init_date)
+    return Processors.value.process(df_market_cap, [AShareBalanceSheet], ['TOT_SHRHLDR_EQY_EXCL_MIN_INT'], operator, init_date)
+
+
+# %% Growth
+def delta_roe(AShareIncome: pd.DataFrame, AShareBalanceSheet: pd.DataFrame, init_date: int, **kwargs) -> pd.DataFrame:
+    def operator(x, y):
+        return ffunc_last(ffunc_mean(ffunc_yoy(ffunc_divide(ffunc_ttm(x), y), method='diff'), 12))
+    return Processors.fundamental.process([AShareIncome, AShareBalanceSheet], ['NET_PROFIT_EXCL_MIN_INT_INC', 'TOT_SHRHLDR_EQY_EXCL_MIN_INT'], operator, init_date)
+
+
+def sales_growth(AShareIncome: pd.DataFrame, init_date: int, **kwargs) -> pd.DataFrame:
+    def operator(x):
+        return ffunc_last(ffunc_cagr(ffunc_ttm(x), 12))
+    return Processors.fundamental.process([AShareIncome], ['OPER_REV'], operator, init_date)
+
+
+def na_growth(AShareBalanceSheet: pd.DataFrame, init_date: int, **kwargs) -> pd.DataFrame:
+    def operator(x):
+        return ffunc_last(ffunc_cagr(x, 12))
+    return Processors.fundamental.process([AShareBalanceSheet], ['TOT_SHRHLDR_EQY_EXCL_MIN_INT'], operator, init_date)
+
+
+# %% Non-Linear Size
+
+
+
+
+# %% Certainty
+
+
+
+# %% SOE
