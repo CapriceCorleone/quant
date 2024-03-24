@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-23 21:28:39
-LastEditTime: 2024-03-24 13:57:10
+LastEditTime: 2024-03-24 17:07:41
 '''
 
 import numpy as np
@@ -22,33 +22,25 @@ def exponential_weight(seq_len: int, half_life: int, dtype: np.dtype, ratio: flo
     return weights
 
 
-# %% Size
-def size_sub(AShareEODDerivativeIndicator: pd.DataFrame, init_date: int, **kwargs):
-    factor = AShareEODDerivativeIndicator.loc[str(init_date):, 'S_VAL_MV'].unstack()
-    factor = np.log(factor + 1)
-    return factor
-
-
-# %% Beta
-# @njit
-def beta_sub_ufunc(stock_return, index_return, window, min_periods, weight_decay, universe):
-    output_beta = np.zeros(stock_return.shape) * np.nan
-    output_se2 = np.zeros(stock_return.shape) * np.nan
-    for i in range(len(stock_return)):
+@njit
+def __time_series_regress(ydata, xdata, window, min_periods, weight_decay, universe):
+    output_beta = np.zeros(ydata.shape) * np.nan
+    output_se2 = np.zeros(ydata.shape) * np.nan
+    for i in range(len(ydata)):
         if i < window - 1:
             continue
-        stock_rtn = stock_return[i - window + 1 : i + 1]
-        index_rtn = index_return[i - window + 1 : i + 1]
-        index_rtn_isnan = np.isnan(index_rtn)
-        for j in range(stock_return.shape[1]):
+        yd = ydata[i - window + 1 : i + 1]
+        xd = xdata[i - window + 1 : i + 1]
+        xd_isnan = np.isnan(xd)
+        for j in range(ydata.shape[1]):
             if universe[i, j] == 0:
                 continue
-            y = stock_rtn[:, j]
-            mask = np.isnan(y) | index_rtn_isnan
+            y = yd[:, j]
+            mask = np.isnan(y) | xd_isnan
             if window - mask.sum() < min_periods:
                 continue
             y = y[~mask]
-            x = index_rtn[~mask]
+            x = xd[~mask]
             x_ = np.append(x[:, None], np.ones((len(y), 1), dtype=x.dtype), axis=1)
             x_T = x_.T
             w = np.diag(weight_decay[~mask])
@@ -62,6 +54,40 @@ def beta_sub_ufunc(stock_return, index_return, window, min_periods, weight_decay
     return output_beta, output_se2
 
 
+def __rolling(x, window):
+    shape = (x.shape[0] - window + 1, window) + x.shape[1:]
+    strides = (x.strides[0], ) + x.strides
+    return np.lib.stride_tricks.as_strided(x, shape=shape, strides=strides)
+
+
+def __rolling_nlargest_mean(x, window, num):
+    strides = __rolling(x, window)
+    result = []
+    for i in range(strides.shape[0]):
+        mask = np.argpartition(strides[i], -num, axis=0)[-num:]
+        mean = np.take_along_axis(strides[i], mask, axis=0).mean(axis=0)
+        result.append(mean)
+    return np.stack(result)
+
+
+def __rolling_nsmallest_mean(x, window, num):
+    strides = __rolling(x, window)
+    result = []
+    for i in range(strides.shape[0]):
+        mask = np.argpartition(strides[i], num, axis=0)[:num]
+        mean = np.take_along_axis(strides[i], mask, axis=0).mean(axis=0)
+        result.append(mean)
+    return np.stack(result)
+
+
+# %% Size
+def size(AShareEODDerivativeIndicator: pd.DataFrame, init_date: int, **kwargs) -> pd.DataFrame:
+    factor = AShareEODDerivativeIndicator.loc[str(init_date):, 'S_VAL_MV'].unstack()
+    factor = np.log(factor + 1)
+    return factor.loc[str(init_date):]
+
+
+# %% Beta
 @njit
 def beta_shrinkage(beta, se2, industry, weight):
     factor = np.zeros(beta.shape) * np.nan
@@ -94,7 +120,7 @@ def beta_shrinkage(beta, se2, industry, weight):
     return factor
 
 
-def beta_sub(AShareEODPrices: pd.DataFrame, AIndexEODPrices: pd.DataFrame, AShareIndustriesClassCITICS: pd.DataFrame, init_date: int, num_process: int = 1, **kwargs):
+def beta(AShareEODPrices: pd.DataFrame, AIndexEODPrices: pd.DataFrame, AShareIndustriesClassCITICS: pd.DataFrame, init_date: int, **kwargs) -> pd.DataFrame:
     """
     WLS回归，然后按照行业贝叶斯压缩，先验值为行业内市值加权beta，后验值为回归beta，系数由回归beta的标准误和行业内beta的方差计算得到，详见
     http://diskussionspapiere.wiwi.uni-hannover.de/pdf_bib/dp-617.pdf
@@ -120,7 +146,7 @@ def beta_sub(AShareEODPrices: pd.DataFrame, AIndexEODPrices: pd.DataFrame, AShar
     index_return.index = index_return.index.astype(int)
     index_return = index_return.reindex(index=aligner.trade_dates).loc[start_date:].values.astype(np.float32)
     weight_decay = exponential_weight(window, half_life, stock_return.dtype, ratio)
-    output_beta, output_se2 = beta_sub_ufunc(stock_return, index_return, window, min_periods, weight_decay, universe.loc[start_date:].values)
+    output_beta, output_se2 = __time_series_regress(stock_return, index_return, window, min_periods, weight_decay, universe.loc[start_date:].values)
     output_beta = aligner.align(pd.DataFrame(output_beta, index=index, columns=columns)).values
     output_se2 = aligner.align(pd.DataFrame(output_se2, index=index, columns=columns)).values
 
@@ -134,3 +160,106 @@ def beta_sub(AShareEODPrices: pd.DataFrame, AIndexEODPrices: pd.DataFrame, AShar
     factor = pd.DataFrame(factor, index=aligner.trade_dates, columns=aligner.tickers)
     factor = aligner.align(factor).loc[init_date:]
     return factor
+
+
+# %% Trend
+def trend(AShareEODPrices: pd.DataFrame, init_date: int, **kwargs) -> pd.DataFrame:
+    window = kwargs['window']
+    min_periods = kwargs['min_periods']
+    stock_quote = AShareEODPrices.copy()
+    stock_quote.loc[stock_quote['S_DQ_TRADESTATUSCODE'] == 0, 'S_DQ_PCTCHANGE'] = np.nan
+    adjclose = (stock_quote['S_DQ_CLOSE'] * stock_quote['S_DQ_ADJFACTOR']).unstack()
+    factor = adjclose.ewm(halflife=20, min_periods=10).mean() / adjclose.ewm(halflife=window, min_periods=min_periods).mean()
+    return factor.loc[str(init_date):]
+
+
+# %% Liquidity
+def daily_turnover(AShareEODPrices: pd.DataFrame, AShareEODDerivativeIndicator: pd.DataFrame) -> pd.DataFrame:
+    stock_quote = AShareEODPrices.copy()
+    stock_quote.loc[stock_quote['S_DQ_TRADESTATUSCODE'] == 0, 'S_DQ_PCTCHANGE'] = np.nan
+    amount = stock_quote['S_DQ_AMOUNT'].unstack() / 10
+    float_mv = AShareEODDerivativeIndicator['S_DQ_MV'].unstack().reindex_like(amount).shift(1)
+    float_mv = float_mv.where(float_mv > 0, 0)
+    factor = np.log(amount / float_mv)
+    factor[~np.isfinite(factor)] = np.nan
+    return factor
+
+
+def turnover(AShareEODPrices: pd.DataFrame, AShareEODDerivativeIndicator: pd.DataFrame, init_date: int, **kwargs) -> pd.DataFrame:
+    window = kwargs['window']
+    min_periods = kwargs['min_periods']
+    factor = daily_turnover(AShareEODPrices, AShareEODDerivativeIndicator).rolling(window, min_periods=min_periods).mean()
+    return factor.loc[str(init_date):]
+
+
+def liquidity_beta(AShareEODPrices: pd.DataFrame, AShareEODDerivativeIndicator: pd.DataFrame, AIndexValuation: pd.DataFrame, init_date: int, **kwargs) -> pd.DataFrame:
+    window = kwargs['window']
+    min_periods = kwargs['min_periods']
+    half_life = kwargs['half_life']
+    ratio = kwargs['ratio']
+    universe = kwargs['universe']
+    aligner = Aligner()
+    calendar = Calendar()
+    
+    start_date = calendar.get_prev_trade_date(init_date, window - 1)
+    stock_turnover = aligner.align(format_unstack_table(daily_turnover(AShareEODPrices, AShareEODDerivativeIndicator))).loc[start_date:]
+    index = stock_turnover.index
+    columns = stock_turnover.columns
+    stock_turnover = stock_turnover.values.astype(np.float32)
+    index_turnover = np.log(AIndexValuation.loc(axis=0)[:, '000985.CSI']['TURNOVER'] / 100).droplevel(1)
+    index_turnover.index = index_turnover.index.astype(int)
+    index_turnover = index_turnover.reindex(index=aligner.trade_dates).loc[start_date:].values.astype(np.float32)
+    weight_decay = exponential_weight(window, half_life, stock_turnover.dtype, ratio)
+    output_beta, output_se2 = __time_series_regress(stock_turnover, index_turnover, window, min_periods, weight_decay, universe.loc[start_date:].values)
+    factor = aligner.align(pd.DataFrame(output_beta, index=index, columns=columns))
+    return factor.loc[init_date:]
+
+
+# %% Volatility
+def stdvol(AShareEODPrices: pd.DataFrame, init_date: int, **kwargs) -> pd.DataFrame:
+    window = kwargs['window']
+    min_periods = kwargs['min_periods']
+    stock_quote = AShareEODPrices.copy()
+    stock_quote.loc[stock_quote['S_DQ_TRADESTATUSCODE'] == 0, 'S_DQ_PCTCHANGE'] = np.nan
+    pctchg = AShareEODPrices['S_DQ_PCTCHANGE'].unstack()
+    factor = pctchg.rolling(window, min_periods=min_periods).std()
+    return factor.loc[str(init_date):]
+
+
+def price_range(AShareEODPrices: pd.DataFrame, init_date: int, **kwargs) -> pd.DataFrame:
+    window = kwargs['window']
+    min_periods = kwargs['min_periods']
+    adjhigh = (AShareEODPrices['S_DQ_HIGH'] * AShareEODPrices['S_DQ_ADJFACTOR']).unstack()
+    adjlow = (AShareEODPrices['S_DQ_LOW'] * AShareEODPrices['S_DQ_ADJFACTOR']).unstack()
+    factor = adjhigh.rolling(window, min_periods=min_periods).max() / adjlow.rolling(window, min_periods=min_periods).min() - 1
+    return factor.loc[str(init_date):]
+
+
+def max_ret(AShareEODPrices: pd.DataFrame, init_date: int, **kwargs) -> pd.DataFrame:
+    window = kwargs['window']
+    num = kwargs['num']
+    aligner = Aligner()
+    calendar = Calendar()
+    
+    start_date = calendar.get_prev_trade_date(init_date, window - 1)
+    stock_return = aligner.align(format_unstack_table(AShareEODPrices['S_DQ_PCTCHANGE'].unstack() / 100)).loc[start_date:]
+    factor = __rolling_nlargest_mean(stock_return.values, window, num)
+    factor = pd.DataFrame(factor, index=stock_return.index[window - 1:], columns=stock_return.columns)
+    factor = aligner.align(factor)
+    return factor.loc[init_date:]
+
+
+def min_ret(AShareEODPrices: pd.DataFrame, init_date: int, **kwargs) -> pd.DataFrame:
+    window = kwargs['window']
+    num = kwargs['num']
+    aligner = Aligner()
+    calendar = Calendar()
+    
+    start_date = calendar.get_prev_trade_date(init_date, window - 1)
+    stock_return = aligner.align(format_unstack_table(AShareEODPrices['S_DQ_PCTCHANGE'].unstack() / 100)).loc[start_date:]
+    factor = __rolling_nsmallest_mean(stock_return.values, window, num)
+    factor = pd.DataFrame(factor, index=stock_return.index[window - 1:], columns=stock_return.columns)
+    factor = aligner.align(factor)
+    return factor.loc[init_date:]
+
+

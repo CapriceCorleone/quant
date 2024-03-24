@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-21 20:25:56
-LastEditTime: 2024-03-24 12:50:57
+LastEditTime: 2024-03-24 14:34:21
 '''
 
 import os
@@ -66,6 +66,6 @@ if __name__ == "__main__":
 
     # Risk Model
     rmm = RiskModelManager('./risk_model/structure.yaml', init_date=20231101)
-    factor = rmm.calc_risk_subfactor(rmm.structure[2]['subfactors'][0])
-    factor = rmm.calc_risk_factor(rmm.structure[1])
+    factor = rmm.calc_risk_subfactor(rmm.structure[5]['subfactors'][3])
+    factor = rmm.calc_risk_factor(rmm.structure[4])
     factor = rmm.calc_exposure()

@@ -9,7 +9,7 @@
       universe: null
       weight: null
       num_process: null
-      formulas: !!python/name:quant.risk_model.formulas.size_sub
+      formulas: !!python/name:quant.risk_model.formulas.size
       process:
         - !!python/name:quant.risk_model.tools.winsorize_box
         - !!python/name:quant.risk_model.tools.weighted_stdd_zscore
@@ -18,15 +18,114 @@
   type: "style"
   subfactors:
     - name: "beta_sub"
-      universe: "universe"
+      universe: "tech_universe"
       weight: "weight"
-      num_process: 8
-      formulas: !!python/name:quant.risk_model.formulas.beta_sub
+      formulas: !!python/name:quant.risk_model.formulas.beta
       kwargs:
         window: 243
         min_periods: 122
         half_life: 122
         ratio: 0.5
+      process:
+        - !!python/name:quant.risk_model.tools.winsorize_box
+        - !!python/name:quant.risk_model.tools.weighted_stdd_zscore
+
+- name: "trend"
+  type: "style"
+  subfactors:
+    - name: "trend_120"
+      universe: null
+      weight: null
+      formulas: !!python/name:quant.risk_model.formulas.trend
+      kwargs:
+        window: 120
+        min_periods: 60
+      process:
+        - !!python/name:quant.risk_model.tools.winsorize_box
+        - !!python/name:quant.risk_model.tools.weighted_stdd_zscore
+    - name: "trend_240"
+      universe: null
+      weight: null
+      formulas: !!python/name:quant.risk_model.formulas.trend
+      kwargs:
+        window: 240
+        min_periods: 120
+      process:
+        - !!python/name:quant.risk_model.tools.winsorize_box
+        - !!python/name:quant.risk_model.tools.weighted_stdd_zscore
+  process:
+    - !!python/name:quant.risk_model.tools.winsorize_box
+    - !!python/name:quant.risk_model.tools.weighted_stdd_zscore
+
+- name: "liquidity"
+  type: "style"
+  subfactors:
+    - name: "turnover"
+      universe: null
+      weight: null
+      formulas: !!python/name:quant.risk_model.formulas.turnover
+      kwargs:
+        window: 243
+        min_periods: 122
+      process:
+        - !!python/name:quant.risk_model.tools.winsorize_box
+        - !!python/name:quant.risk_model.tools.weighted_stdd_zscore
+    - name: "liquidity_beta"
+      universe: "tech_universe"
+      weight: null
+      formulas: !!python/name:quant.risk_model.formulas.liquidity_beta
+      kwargs:
+        window: 243
+        min_periods: 122
+        half_life: 122
+        ratio: 0.5
+      process:
+        - !!python/name:quant.risk_model.tools.winsorize_box
+        - !!python/name:quant.risk_model.tools.weighted_stdd_zscore
+  process:
+    - !!python/name:quant.risk_model.tools.winsorize_box
+    - !!python/name:quant.risk_model.tools.weighted_stdd_zscore
+
+- name: "volatility"
+  type: "style"
+  subfactors:
+    - name: "stdvol"
+      universe: null
+      weight: null
+      formulas: !!python/name:quant.risk_model.formulas.stdvol
+      kwargs:
+        window: 243
+        min_periods: 122
+      process:
+        - !!python/name:quant.risk_model.tools.winsorize_box
+        - !!python/name:quant.risk_model.tools.weighted_stdd_zscore
+    - name: "price_range"
+      universe: null
+      weight: null
+      formulas: !!python/name:quant.risk_model.formulas.price_range
+      kwargs:
+        window: 243
+        min_periods: 122
+      process:
+        - !!python/name:quant.risk_model.tools.winsorize_box
+        - !!python/name:quant.risk_model.tools.weighted_stdd_zscore
+    - name: "max_ret_6"
+      universe: null
+      weight: null
+      formulas: !!python/name:quant.risk_model.formulas.max_ret
+      kwargs:
+        window: 243
+        num: 6
+      process:
+        - !!python/name:quant.risk_model.tools.winsorize_box
+        - !!python/name:quant.risk_model.tools.weighted_stdd_zscore
+    - name: "min_ret_6"
+      universe: null
+      weight: null
+      formulas: !!python/name:quant.risk_model.formulas.min_ret
+      kwargs:
+        window: 243
+        num: 6
       process:
         - !!python/name:quant.risk_model.tools.winsorize_box
         - !!python/name:quant.risk_model.tools.weighted_stdd_zscore
