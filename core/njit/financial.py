@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-24 18:45:17
-LastEditTime: 2024-03-25 00:12:48
+LastEditTime: 2024-03-25 20:07:53
 '''
 
 import numpy as np
@@ -240,4 +240,123 @@ def ffunc_mscore(m, window=4):
             mu = np.mean(m_within[:, -1])
             sigma = np.std(m_within[:, -1])
             result[i] = np.array([ann_dt, period, mu / sigma])
+    return result[result[:, 0] > 0]
+
+
+@njit
+def ffunc_vol_adj(m, window=4):
+    """
+    volatility adjusted score
+    """
+    result = np.zeros((len(m), 3), dtype=np.float64)
+    for i in range(len(m)):
+        ann_dt, period, f = m[i]
+        m_hist = m[(m[:, 0] <= ann_dt) & (m[:, 1] <= period)]
+        m_within = get_n_period_within(m_hist, window + 4)
+        drift = np.zeros((window, 2))
+        if len(m_within) >= window + 4:
+            for j in range(4, len(m_within)):
+                rt = m_within[j, 1]
+                qdata = m_within[j, -1]
+                idx_last = np.where(m_within[:, 1] == rt - 10000)[0]
+                if len(idx_last) > 0:
+                    qdata_last = m_within[idx_last[0], -1]
+                    drift[j - 4] = np.array([rt, qdata - qdata_last])
+        drift = drift[drift[:, 0] != 0]
+        if len(drift) >= window / 2:
+            sigma = np.std(drift[:, 1])
+            rt = m_within[-1, 1]
+            if sigma > 0:
+                su = m_within[-1, 1] / sigma
+                result[i] = np.array([ann_dt, period, su])
+    return result[result[:, 0] > 0]
+
+
+@njit
+def ffunc_su(m, window=8):
+    """
+    standardized unexpected data
+    """
+    result = np.zeros((len(m), 3), dtype=np.float64)
+    window_data = window + 5
+    for i in range(len(m)):
+        ann_dt, period, f = m[i]
+        m_hist = m[(m[:, 0] <= ann_dt) & (m[:, 1] <= period)]
+        m_within = get_n_period_within(m_hist, window_data)
+        if len(m_within) >= window_data:
+            yoy_diffs = m_within[4:-1, -1] - m_within[:-5, -1]
+            mu = np.mean(yoy_diffs)
+            sigma = np.std(yoy_diffs)
+            f_last = get_target_period(m_hist, shift_period(period, 4))
+            if (f_last is not None) and (sigma != 0) and np.isfinite(sigma):
+                excess = f - (f_last[-1] + mu)
+                result[i] = np.array([ann_dt, period, excess / sigma])
+    return result[result[:, 0] > 0]
+
+
+@njit
+def ffunc_trend(m, window=8):
+    """
+    time regression coefficient with quarterly dummy variable
+    """
+    result = np.zeros((len(m), 3), dtype=np.float64)
+    x = np.zeros((window, 5))
+    x[:, 0] = np.arange(window)
+    n = 1
+    for i in range(window):
+        x[i, n] = 1
+        n += 1
+        if n > 4:
+            n = 1
+    x[:, -1] = 1
+    for i in range(len(m)):
+        ann_dt, period, f = m[i]
+        m_hist = m[(m[:, 0] <= ann_dt) & (m[:, 1] <= period)]
+        m_within = get_n_period_within(m_hist, window)
+        if len(m_within) == window:
+            zscore = (m_within[:, -1] - m_within[:, -1].mean()) / (m_within[:, -1].std())
+            zscore[~np.isfinite(zscore)] == 0
+            slope = np.linalg.lstsq(x, zscore)[0][0]
+            result[i] = np.array([ann_dt, period, slope])
+    return result[result[:, 0] > 0]
+
+
+@njit
+def ffunc_zscore_diff(m, window_zscore=8, window_diff=4):
+    """
+    zscore difference
+    """
+    result = np.zeros((len(m), 3), dtype=np.float64)
+    for i in range(len(m)):
+        ann_dt, period, f = m[i]
+        m_hist = m[(m[:, 0] <= ann_dt) & (m[:, 1] <= period)]
+        m_within = get_n_period_within(m_hist, window_zscore)
+        if len(m_within) > window_diff:
+            zscore = m_within[:, -1] / m_within[:, -1].std()
+            result[i] = np.array([ann_dt, period, zscore[-1] - zscore[-window_diff - 1]])
+    return result[result[:, 0] > 0]
+
+
+@njit
+def ffunc_zscore_yoy_qoq(m, window_zscore=8, window_diff=4):
+    """
+    zscore difference
+    """
+    result = np.zeros((len(m), 3), dtype=np.float64)
+    for i in range(len(m)):
+        ann_dt, period, f = m[i]
+        m_hist = m[(m[:, 0] <= ann_dt) & (m[:, 1] <= period)]
+        m_within = get_n_period_within(m_hist, window_zscore)
+        if len(m_within) > window_diff:
+            zscore = m_within[:, -1] / m_within[:, -1].std()
+            q0 = zscore[-1] - zscore[-window_diff - 1]
+            q1 = zscore[-2] - zscore[-window_diff - 2]
+            g = q0 - q1
+            penalty = 0
+            if zscore[-1] < zscore[-window_diff - 1]:
+                penalty += 1
+            if m_within[-1, -1] < 0:
+                penalty += 1
+            g = g - penalty
+            result[i] = np.array[ann_dt, period, g]
     return result[result[:, 0] > 0]

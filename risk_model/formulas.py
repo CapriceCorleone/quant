@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-23 21:28:39
-LastEditTime: 2024-03-25 00:21:50
+LastEditTime: 2024-03-25 20:11:15
 '''
 
 import numpy as np
@@ -13,6 +13,7 @@ from scipy import stats
 
 from ..core import Aligner, Calendar, Universe, Processors, format_unstack_table
 from ..core.njit.financial import ffunc_last, ffunc_ttm, ffunc_mean, ffunc_yoy, ffunc_divide, ffunc_cagr
+from .tools import winsorize_box, weighted_stdd_zscore
 
 
 def unstack_market_cap(AShareEODDerivativeIndicator: pd.DataFrame, init_date: int) -> pd.DataFrame:
@@ -354,6 +355,8 @@ def na_growth(AShareBalanceSheet: pd.DataFrame, init_date: int, **kwargs) -> pd.
 
 
 # %% Non-Linear Size
+def nls(AShareEODDerivativeIndicator: pd.DataFrame, init_date: int, **kwargs):
+    weight = kwargs['weight']
 
 
 
