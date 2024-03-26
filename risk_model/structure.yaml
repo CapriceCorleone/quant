@@ -194,6 +194,17 @@
     - !!python/name:quant.risk_model.tools.winsorize_box
     - !!python/name:quant.risk_model.tools.weighted_stdd_zscore
 
+- name: "nls"
+  type: "style"
+  subfactors:
+    - name: "cubic_size"
+      universe: null
+      weight: "weight"
+      formulas: !!python/name:quant.risk_model.formulas.nls
+      process:
+        - !!python/name:quant.risk_model.tools.winsorize_box
+        - !!python/name:quant.risk_model.tools.weighted_stdd_zscore
+
 - type: "industry"
   name:
     - "交通运输"

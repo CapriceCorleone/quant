@@ -74,6 +74,6 @@ if __name__ == "__main__":
 
     # Risk Model
     rmm = RiskModelManager('./risk_model/structure.yaml', init_date=20231101)
-    factor = rmm.calc_risk_subfactor(rmm.structure[5]['subfactors'][4])
-    factor = rmm.calc_risk_factor(rmm.structure[5])
+    factor = rmm.calc_risk_subfactor(rmm.structure[6]['subfactors'][4])
+    factor = rmm.calc_risk_factor(rmm.structure[8])
     factor = rmm.calc_exposure()

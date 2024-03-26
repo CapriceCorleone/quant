@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-23 21:28:39
-LastEditTime: 2024-03-25 20:11:15
+LastEditTime: 2024-03-26 20:56:11
 '''
 
 import numpy as np
@@ -112,6 +112,25 @@ def __rolling_nsmallest_mean(x, window, num):
         mean = np.take_along_axis(strides[i], mask, axis=0).mean(axis=0)
         result.append(mean)
     return np.stack(result)
+
+
+@njit
+def __cross_sectional_regress(ydata, xdata, weight):
+    residual = np.zeros(ydata.shape) * np.nan
+    for i in range(len(ydata)):
+        y = ydata[i]
+        x = xdata[i]
+        w = weight[i]
+        mask = np.isnan(y) | np.isnan(x) | np.isnan(w)
+        if len(y) - mask.sum() <= 2:
+            continue
+        yy = y[~mask]
+        xx = np.append(x[~mask][:, None], np.ones((len(yy), 1), dtype=x.dtype), axis=1)
+        xx_T = xx.T
+        ww = np.diag(w[~mask])
+        beta = np.linalg.inv(xx_T @ ww @ xx) @ xx_T @ ww @ yy
+        residual[i] = y - beta[1] - beta[0] * x
+    return residual
 
 
 # %% Size
@@ -325,40 +344,53 @@ def ep_ttm(AShareEODDerivativeIndicator: pd.DataFrame, AShareIncome: pd.DataFram
     def operator(x):
         return ffunc_last(ffunc_ttm(x))
     df_market_cap = unstack_market_cap(AShareEODDerivativeIndicator, init_date)
-    return Processors.value.process(df_market_cap, [AShareIncome], ['NET_PROFIT_EXCL_MIN_INT_INC'], operator, init_date)
+    factor = Processors.value.process(df_market_cap, [AShareIncome], ['NET_PROFIT_EXCL_MIN_INT_INC'], operator, init_date)
+    return factor.pivot(index='trade_date', columns='ticker', values='factor').loc[init_date:]
 
 
 def bp(AShareEODDerivativeIndicator: pd.DataFrame, AShareBalanceSheet: pd.DataFrame, init_date: int, **kwargs) -> pd.DataFrame:
     def operator(x):
         return ffunc_last(x)
     df_market_cap = unstack_market_cap(AShareEODDerivativeIndicator, init_date)
-    return Processors.value.process(df_market_cap, [AShareBalanceSheet], ['TOT_SHRHLDR_EQY_EXCL_MIN_INT'], operator, init_date)
+    factor = Processors.value.process(df_market_cap, [AShareBalanceSheet], ['TOT_SHRHLDR_EQY_EXCL_MIN_INT'], operator, init_date)
+    return factor.pivot(index='trade_date', columns='ticker', values='factor').loc[init_date:]
 
 
 # %% Growth
 def delta_roe(AShareIncome: pd.DataFrame, AShareBalanceSheet: pd.DataFrame, init_date: int, **kwargs) -> pd.DataFrame:
     def operator(x, y):
         return ffunc_last(ffunc_mean(ffunc_yoy(ffunc_divide(ffunc_ttm(x), y), method='diff'), 12))
-    return Processors.fundamental.process([AShareIncome, AShareBalanceSheet], ['NET_PROFIT_EXCL_MIN_INT_INC', 'TOT_SHRHLDR_EQY_EXCL_MIN_INT'], operator, init_date)
+    factor = Processors.fundamental.process([AShareIncome, AShareBalanceSheet], ['NET_PROFIT_EXCL_MIN_INT_INC', 'TOT_SHRHLDR_EQY_EXCL_MIN_INT'], operator, init_date)
+    return factor.pivot(index='trade_date', columns='ticker', values='factor').loc[init_date:]
 
 
 def sales_growth(AShareIncome: pd.DataFrame, init_date: int, **kwargs) -> pd.DataFrame:
     def operator(x):
         return ffunc_last(ffunc_cagr(ffunc_ttm(x), 12))
-    return Processors.fundamental.process([AShareIncome], ['OPER_REV'], operator, init_date)
+    factor = Processors.fundamental.process([AShareIncome], ['OPER_REV'], operator, init_date)
+    return factor.pivot(index='trade_date', columns='ticker', values='factor').loc[init_date:]
 
 
 def na_growth(AShareBalanceSheet: pd.DataFrame, init_date: int, **kwargs) -> pd.DataFrame:
     def operator(x):
         return ffunc_last(ffunc_cagr(x, 12))
-    return Processors.fundamental.process([AShareBalanceSheet], ['TOT_SHRHLDR_EQY_EXCL_MIN_INT'], operator, init_date)
+    factor = Processors.fundamental.process([AShareBalanceSheet], ['TOT_SHRHLDR_EQY_EXCL_MIN_INT'], operator, init_date)
+    return factor.pivot(index='trade_date', columns='ticker', values='factor').loc[init_date:]
 
 
 # %% Non-Linear Size
 def nls(AShareEODDerivativeIndicator: pd.DataFrame, init_date: int, **kwargs):
     weight = kwargs['weight']
-
-
+    aligner = Aligner()
+    factor_size = size(AShareEODDerivativeIndicator, init_date)
+    factor_size = aligner.align(format_unstack_table(factor_size))
+    factor_size = winsorize_box(factor_size)
+    factor_size = weighted_stdd_zscore(factor_size, weight).astype(weight.values.dtype)
+    factor_size_cubed = factor_size ** 3
+    factor = __cross_sectional_regress(factor_size_cubed.values, factor_size.values, np.sqrt(weight.values))
+    factor = pd.DataFrame(factor, index=factor_size.index, columns=factor_size.columns)
+    factor = aligner.align(factor)
+    return factor.loc[init_date:]
 
 
 # %% Certainty

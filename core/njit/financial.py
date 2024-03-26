@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-24 18:45:17
-LastEditTime: 2024-03-25 20:07:53
+LastEditTime: 2024-03-26 20:33:37
 '''
 
 import numpy as np
@@ -145,7 +145,7 @@ def ffunc_mean(m, window=4):
         ann_dt, period, f = m[i]
         m_hist = m[(m[:, 0] <= ann_dt) & (m[:, 1] <= period)]
         m_within = get_n_period_within(m_hist, window)
-        if len(m_within) > 2:
+        if len(m_within) >= 2:
             mu = np.mean(m_within[:, 2])
             result[i] = np.array([ann_dt, period, mu])
     return result[result[:, 0] > 0]
@@ -155,7 +155,7 @@ def ffunc_mean(m, window=4):
 def get_years_between(t0, t1):
     mds = [331, 630, 930, 1231]
     years = t1 // 10000 - t0 // 10000
-    month0, month1 = mds.index(t0 % 100000), mds.index(t1 % 100000)
+    month0, month1 = mds.index(t0 % 10000), mds.index(t1 % 10000)
     month_years = (month1 - month0) * 3 / 12
     return years + month_years
 
@@ -206,6 +206,24 @@ def ffunc_divide(x, y, non_neg=True):
                 denominator = abs(denominator)
             if denominator != 0:
                 result[i] = np.array([ann_dt, period, numerator / denominator])
+    return result[result[:, 0] > 0]
+
+
+@njit
+def ffunc_multiply(x, y):
+    """
+    return x * y according to the date and period of x
+    """
+    result = np.zeros((len(x), 3), dtype=np.float64)
+    for i in range(len(x)):
+        ann_dt, period, left = x[i]
+        y_hist = y[(y[:, 0] <= ann_dt) & (y[:, 1] <= period)]
+        if len(y_hist) > 0:
+            period_y = period
+            if period_y not in y_hist[:, 1]:
+                period_y = y_hist[:, 1].max()
+            right = get_target_period(y_hist, period_y)[-1]
+            result[i] = np.array([ann_dt, period, left * right])
     return result[result[:, 0] > 0]
 
 

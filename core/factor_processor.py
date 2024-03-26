@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-24 17:29:24
-LastEditTime: 2024-03-24 18:20:20
+LastEditTime: 2024-03-26 20:40:39
 '''
 
 import numpy as np
@@ -18,7 +18,7 @@ def fill_to_date(m, date):
     data[:, 0] = date
     for n in range(len(m)):
         if m[n, 0] <= date[0]:
-            date[:, 1:] = m[n, 1:]
+            data[:, 1:] = m[n, 1:]
         else:
             ix_start = np.where(date < m[n, 0])[0].max()  # 数据对齐到公布日前一交易日
             ix_end = np.where(date < m[n, 0] + 10000)[0].max() + 1
@@ -193,7 +193,7 @@ class StaticProcessors(type):
     
     @property
     def fundamental(self):
-        return FundamentalFactorProcessor
+        return FundamentalFactorProcessor()
     
 
 class Processors(metaclass=StaticProcessors):
