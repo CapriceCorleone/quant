@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-24 17:30:20
-LastEditTime: 2024-03-24 18:53:05
+LastEditTime: 2024-03-26 22:16:15
 '''
 
 import numpy as np
@@ -73,7 +73,7 @@ def afunc_consensus(m, annual_report, calendar, init_date, window=122, half_life
             fy1 = consensus[i, report_year_gap + 2]
             fy2 = consensus[i, report_year_gap + 3]
             day_num = date_ix_dict[t_end] - date_ix_dict[calendar[calendar <= t_end // 10000 * 10000].max()]
-            w = np.array([252- day_num, day_num])
+            w = np.array([252 - day_num, day_num])
             w[w < 0] = 0
             w = w / w.sum()
             consensus[i, -1] = fy1 * w[0] + fy2 * w[1]

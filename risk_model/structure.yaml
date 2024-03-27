@@ -205,6 +205,34 @@
         - !!python/name:quant.risk_model.tools.winsorize_box
         - !!python/name:quant.risk_model.tools.weighted_stdd_zscore
 
+- name: "certainty"
+  type: "style"
+  subfactors:
+    - name: "instholder_pct"
+      universe: null
+      weight: null
+      formulas: !!python/name:quant.risk_model.formulas.instholder_pct
+      process:
+        - !!python/name:quant.risk_model.tools.winsorize_box
+        - !!python/name:quant.risk_model.tools.weighted_stdd_zscore
+    - name: "coverage"
+      universe: null
+      weight: null
+      formulas: !!python/name:quant.risk_model.formulas.coverage
+      process:
+        - !!python/name:quant.risk_model.tools.winsorize_box
+        - !!python/name:quant.risk_model.tools.weighted_stdd_zscore
+    - name: "listed_days"
+      universe: null
+      weight: null
+      formulas: !!python/name:quant.risk_model.formulas.listed_days
+      process:
+        - !!python/name:quant.risk_model.tools.winsorize_box
+        - !!python/name:quant.risk_model.tools.weighted_stdd_zscore
+  process:
+    - !!python/name:quant.risk_model.tools.winsorize_box
+    - !!python/name:quant.risk_model.tools.weighted_stdd_zscore
+
 - type: "industry"
   name:
     - "交通运输"

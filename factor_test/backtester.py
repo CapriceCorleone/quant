@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-20 22:36:50
-LastEditTime: 2024-03-23 17:02:35
+LastEditTime: 2024-03-27 19:08:56
 '''
 
 import time
@@ -115,7 +115,7 @@ class FactorTester:
             groups.append(tks[n * i : n * (i + 1)])
         return groups
     
-    def calc_portfolio_return_and_turnover(self, holding):
+    def calc_portfolio_return_and_turnover(self, holding, weight=None):
         rebal_dates = np.array(sorted(list(holding.keys())))
         next_rebal_dates = np.array([self.calendar.get_next_trade_date(i) for i in rebal_dates])
         daily_return = {}
@@ -133,7 +133,10 @@ class FactorTester:
             if day in next_rebal_dates:
                 # 调仓日
                 cur_p = holding[last_rebal_date]
-                cur_w = np.ones(len(cur_p)) / len(cur_p)
+                if weight is None:
+                    cur_w = np.ones(len(cur_p)) / len(cur_p)
+                else:
+                    cur_w = weight[last_rebal_date]
                 if day == next_rebal_dates[0]:
                     # 第一个调仓日：以昨收盘价买入
                     ret = self.stock_close_return.loc[day, cur_p].fillna(value=0).values
@@ -489,6 +492,9 @@ class FactorTester:
         time0 = time.time()
         print('-' * 100)
         print(f'Start testing for factor [{factor_name}] ...')
+
+        factor = factor.copy()
+        factor[self.universe.astype(int) == 0] = np.nan
 
         # 分组
         holdings = {i: {} for i in range(1, ngroups + 1)}
