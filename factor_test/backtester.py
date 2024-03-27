@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-20 22:36:50
-LastEditTime: 2024-03-27 19:08:56
+LastEditTime: 2024-03-27 19:18:41
 '''
 
 import time
@@ -9,7 +9,6 @@ import numpy as np
 import pandas as pd
 import statsmodels.api as sm
 import matplotlib.pyplot as plt
-from typing import Union, List
 
 from ..core import DataLoader, Universe, Calendar, Aligner
 
@@ -40,8 +39,9 @@ class FactorTester:
         '综合金融', '计算机', '轻工制造', '通信', '钢铁', '银行', '非银行金融', '食品饮料'
     ]
     
-    def __init__(self, universe: Universe, frequency: str, start_date: int, end_date: int, deal_price: str = 'preclose') -> None:
+    def __init__(self, universe: pd.DataFrame, frequency: str, start_date: int, end_date: int, deal_price: str = 'preclose') -> None:
         self.dl = DataLoader(save=False)
+        self.univ = Universe()
         self.universe = universe
         self.frequency = frequency
         self.start_date = start_date
@@ -56,31 +56,29 @@ class FactorTester:
         self._prepare_risk_model()
 
     def _prepare_basic_set(self) -> None:
-        self.basic_set = {
-            'stock_quote': self.dl.load('stock_quote'),
+        basic_set = {
+            'stock_quote': self.dl.load('stock_quote', keys=list(set(['open', 'close', self.deal_price, 'adjfactor']))),
             'index_quote': self.dl.load('index_quote')
         }
-        self.stock_adjopen = self.basic_set['stock_quote']['open'] * self.basic_set['stock_quote']['adjfactor']
-        self.stock_adjclose = self.basic_set['stock_quote']['close'] * self.basic_set['stock_quote']['adjfactor']
+        self.stock_adjopen = basic_set['stock_quote']['open'] * basic_set['stock_quote']['adjfactor']
+        self.stock_adjclose = basic_set['stock_quote']['close'] * basic_set['stock_quote']['adjfactor']
         self.stock_close_return = self.stock_adjclose / self.stock_adjclose.shift(1) - 1
         self.stock_open_return  =self.stock_adjopen / self.stock_adjclose.shift(1) - 1
         if self.deal_price in ['open', 'vwap', 'close']:
-            self.stock_deal_price = self.basic_set['stock_quote'][self.deal_price] * self.basic_set['stock_quote']['adjfactor']
+            self.stock_deal_price = basic_set['stock_quote'][self.deal_price] * basic_set['stock_quote']['adjfactor']
             self.stock_sell_return = self.stock_deal_price / self.stock_adjclose.shift(1) - 1
             self.stock_buy_return = self.stock_adjclose / self.stock_deal_price - 1
         else:
             self.stock_deal_price = self.stock_adjclose.shift(1)
 
+    def _prepare_industry(self, name) -> None:
+        AShareIndustriesClassCITICS = self.dl.load('AShareIndustriesClassCITICS')
+        info = AShareIndustriesClassCITICS[AShareIndustriesClassCITICS['INDUSTRIESNAME'] == name][['S_INFO_WINDCODE', 'ENTRY_DT', 'REMOVE_DT']]
+        df = self.univ._format_universe(self.univ.arrange_info_table(info))
+        return df
+
     def _prepare_risk_model(self) -> None:
         self.risk_model = {}
-
-        # 中信一级行业
-        univ = Universe()
-        AShareIndustriesClassCITICS = self.dl.load('AShareIndustriesClassCITICS')
-        for name in self.RISK_INDUSTRY_FACTORS:
-            info = AShareIndustriesClassCITICS[AShareIndustriesClassCITICS['INDUSTRIESNAME'] == name][['S_INFO_WINDCODE', 'ENTRY_DT', 'REMOVE_DT']]
-            df = univ._format_universe(univ.arrange_info_table(info))
-            self.risk_model[name] = df
         
         # 对数总市值
         stock_size = self.dl.load('stock_size')
@@ -215,7 +213,7 @@ class FactorTester:
             ic_by_ind = {}
             ric_by_ind = {}
             for name in self.RISK_INDUSTRY_FACTORS:
-                ind = self.risk_model[name].loc[day, tks].values
+                ind = self._prepare_industry(name).loc[day, tks].values
                 ic_by_ind[name] = dat.iloc[ind == 1].corr().iloc[0, 1]
                 ric_by_ind[name] = dat.iloc[ind == 1].corr(method='spearman').iloc[0, 1]
             ic_series[day] = ic
@@ -254,7 +252,7 @@ class FactorTester:
         }).dropna()
         industry_names = []
         for indname in self.RISK_INDUSTRY_FACTORS:
-            ind = self.risk_model[indname].loc[last_day]
+            ind = self._prepare_industry(indname).loc[last_day]
             ind = ind[ind == 1]
             industry_names += np.c_[ind.index.values, [indname] * len(ind)].tolist()
         industry_names = pd.DataFrame(industry_names, columns=['ticker', 'indname'])

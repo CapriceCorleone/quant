@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-20 22:38:17
-LastEditTime: 2024-03-23 14:53:05
+LastEditTime: 2024-03-27 19:15:00
 '''
 
 import os
@@ -27,7 +27,7 @@ class DataLoader:
         self.save = save
         self.storage = {}
     
-    def load(self, table: str, suffix: str = 'pkl'):
+    def load(self, table: str, suffix: str = 'pkl', keys: List[str] = None):
         if table in self.storage:
             return self.storage[table]
         file_name = table + '.' + suffix
@@ -35,6 +35,8 @@ class DataLoader:
             if file_name in file_names:
                 path = Path(dir_path, file_name)
                 data = self._read_func(suffix)(path)
+                if keys is not None:
+                    data = {k: v for k, v in data.items() if k in keys}
                 if self.save:
                     self.storage[table] = data
                 return data
