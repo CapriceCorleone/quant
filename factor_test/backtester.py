@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-20 22:36:50
-LastEditTime: 2024-03-27 19:18:41
+LastEditTime: 2024-03-27 19:26:55
 '''
 
 import time
@@ -197,6 +197,10 @@ class FactorTester:
         tstats_series = {}
         ic_series_by_ind = {}
         ric_series_by_ind = {}
+        industry = {}
+        for name in self.RISK_INDUSTRY_FACTORS:
+            ind = self._prepare_industry(name).loc[self.rebal_dates]
+            industry[name] = ind
         for day in self.rebal_dates[:-1]:
             f = factor.loc[day].dropna()
             tks = f.index.values
@@ -213,7 +217,7 @@ class FactorTester:
             ic_by_ind = {}
             ric_by_ind = {}
             for name in self.RISK_INDUSTRY_FACTORS:
-                ind = self._prepare_industry(name).loc[day, tks].values
+                ind = industry[name].loc[day, tks].values
                 ic_by_ind[name] = dat.iloc[ind == 1].corr().iloc[0, 1]
                 ric_by_ind[name] = dat.iloc[ind == 1].corr(method='spearman').iloc[0, 1]
             ic_series[day] = ic
@@ -495,6 +499,7 @@ class FactorTester:
         factor[self.universe.astype(int) == 0] = np.nan
 
         # 分组
+        print(f'按因子值进行分组: 分为{ngroups}组')
         holdings = {i: {} for i in range(1, ngroups + 1)}
         for day in self.rebal_dates:
             ix = np.where(self.trade_dates == day)[0][0]
@@ -504,6 +509,7 @@ class FactorTester:
                 holdings[i][day] = groups[i - 1]
         
         # 分组回测（日度收益率 & 日度换手率）
+        print('分组回测')
         daily_rets = {}
         daily_turns = {}
         for i in range(1, ngroups + 1):
@@ -512,15 +518,19 @@ class FactorTester:
         daily_turns = pd.DataFrame(daily_turns).dropna()
 
         # 因子回测 (IC & ICIR & tstats & 分行业IC)
+        print('因子回测')
         ic_series, ric_series, tstats_series, ic_series_by_ind, ric_series_by_ind = self.calc_factor_statistics(factor)
 
         # 风格因子相关系数
+        print('计算风格因子相关系数')
         style_corr_series = self.calc_factor_style_corr(factor)
 
         # 最新一期因子值
+        print('获取最新一期因子值')
         latest_score_info = self.get_latest_score_info(factor)
 
         # 绩效统计
+        print('绩效统计')
         output = self.calc_factor_performance(daily_rets, daily_turns, ic_series, ric_series, tstats_series, ic_series_by_ind, ric_series_by_ind, style_corr_series, latest_score_info)
 
         # 画图

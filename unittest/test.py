@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-21 20:25:56
-LastEditTime: 2024-03-24 20:43:20
+LastEditTime: 2024-03-27 19:29:08
 '''
 
 import os
@@ -67,8 +67,8 @@ if __name__ == "__main__":
 
     factor_stan = stdd_zscore(winsorize_mad(factor))
 
-    factor_orth = orthogonalize(factor_stan, *list(map(lambda x: ft.risk_model[x], ['lncap'] + ft.RISK_INDUSTRY_FACTORS)))
-    factor_orth = orthogonalize_monthend(factor_stan, *list(map(lambda x: ft.risk_model[x], ['lncap'] + ft.RISK_INDUSTRY_FACTORS)))
+    factor_orth = orthogonalize(factor_stan, ft.risk_model['lncap'], *list(map(lambda x: ft._prepare_industry(x), ft.RISK_INDUSTRY_FACTORS)))
+    factor_orth = orthogonalize_monthend(factor_stan, ft.risk_model['lncap'], *list(map(lambda x: ft._prepare_industry(x), ft.RISK_INDUSTRY_FACTORS)))
 
     output = ft.test(factor_orth, 10, True)
 
