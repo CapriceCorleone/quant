@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-23 21:32:14
-LastEditTime: 2024-03-29 22:51:37
+LastEditTime: 2024-03-30 15:41:42
 '''
 
 import os
@@ -20,7 +20,7 @@ class RiskModelManager:
 
     root = conf.PATH_RISK_MODEL_DATA
 
-    def __init__(self, structure_file: str, init_date: int = 20060101, num_process: int = 1) -> None:
+    def __init__(self, structure_file: str, init_date: int = 20081231, num_process: int = 1) -> None:
         with open(structure_file, 'r', encoding='utf-8') as file:
             self.structure = yaml.load(file, yaml.FullLoader)
         self.dl = DataLoader()
@@ -48,8 +48,6 @@ class RiskModelManager:
             kwargs.update(config['kwargs'])
         factor = func(**args, **kwargs)
         factor = format_unstack_table(factor)
-        factor.index.name = 'trade_date'
-        factor.columns.name = 'ticker'
         
         # correct dates
         factor_date_diff = np.setdiff1d(factor.index.values, self.aligner.trade_dates)
