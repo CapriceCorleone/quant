@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-23 21:32:14
-LastEditTime: 2024-03-26 21:43:07
+LastEditTime: 2024-03-29 22:51:37
 '''
 
 import os
@@ -28,6 +28,7 @@ class RiskModelManager:
         self.init_date = init_date
         self.num_process = num_process
         self.univ = Universe()
+        self.init_universe = self.univ()
         self.universe = self.univ(listed_days=122, include_st=False)
         self.tech_universe = self.univ(listed_days=63)
         self.weight = self.dl.load('stock_size')['total_mv'] / 1e8
@@ -59,6 +60,7 @@ class RiskModelManager:
             factor = factor.reset_index().drop_duplicates('trade_date', keep='last').set_index('trade_date')
         
         factor = self.aligner.align(factor)
+        factor[self.init_universe == 0] = np.nan
         return factor
     
     def process_factor(self, factor, processes):
@@ -82,7 +84,8 @@ class RiskModelManager:
         if config['weight'] is not None:
             kwargs['weight'] = self.weight
         factor = self.calc_factor(config, **kwargs)
-        factor = self.process_factor(factor, config['process'])
+        if 'process' in config:
+            factor = self.process_factor(factor, config['process'])
         return factor
     
     def calc_risk_factor(self, config):

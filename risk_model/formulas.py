@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-23 21:28:39
-LastEditTime: 2024-03-26 22:11:47
+LastEditTime: 2024-03-29 22:52:27
 '''
 
 import numpy as np
@@ -10,9 +10,11 @@ import multiprocessing as mp
 from tqdm import tqdm
 from numba import njit
 from scipy import stats
+from bisect import bisect_left, bisect_right
 
 from ..core import Aligner, Calendar, Universe, Processors, format_unstack_table
 from ..core.njit.financial import ffunc_last, ffunc_ttm, ffunc_mean, ffunc_yoy, ffunc_divide, ffunc_cagr
+from ..core.njit.analyst import afunc_coverage
 from .tools import winsorize_box, weighted_stdd_zscore
 
 
@@ -470,10 +472,8 @@ def instholder_pct(AShareEODPrices: pd.DataFrame, AShareEODDerivativeIndicator: 
 
     quantity = portfolios.groupby(['F_PRT_ENDDATE', 'S_INFO_STOCKWINDCODE'])['F_PRT_STKQUANTITY'].sum().unstack()
     quantity = format_unstack_table(quantity)
-    print(quantity)
     quantity.index = [day if calendar.is_trade_date(day) else calendar.get_prev_trade_date(day, n=1) for day in quantity.index]
     quantity = format_unstack_table(quantity)
-    print(quantity)
     quantity = aligner.align(quantity)
     float_share = format_unstack_table(AShareEODDerivativeIndicator.loc[str(init_date - 10000):, 'FLOAT_A_SHR_TODAY'].unstack())
     float_share = aligner.align(float_share)
@@ -486,21 +486,52 @@ def instholder_pct(AShareEODPrices: pd.DataFrame, AShareEODDerivativeIndicator: 
 def coverage(AShareEODDerivativeIndicator: pd.DataFrame, AShareEarningEst: pd.DataFrame, init_date: int, **kwargs) -> pd.DataFrame:
     weight = kwargs['weight']
     aligner = Aligner()
-    calendar = Calendar()
-    reports = AShareEarningEst[['S_INFO_WINDCODE', 'ANN_DT', 'RESEARCH_INST_NAME']].drop_duplicates().dropna()
-    reports['ANN_DT'] = reports['ANN_DT'].astype(int)
-    reports = reports[reports['ANN_DT'] >= init_date - 20000]
-    ann_dt_list = reports['ANN_DT'].unique().values
-    ann_trade_date_list = [day if calendar.is_trade_date(day) else calendar.get_prev_trade_date(day, n=1) for day in ann_dt_list]
-    reports['ANN_DT'] = reports['ANN_DT'].map(dict(zip(ann_dt_list, ann_trade_date_list)))
-    reports = reports.sort_values(['ANN_DT', 'S_INFO_WINDCODE', 'RESEARCH_INST_NAME'])
-    end_ix = reports.groupby(['ANN_DT'])['S_INFO_WINDCODE'].count().cumsum()
-    stt_ix = end_ix.shift(1).fillna(value=0).astype(int)
-    
+    factor = Processors.analyst.process(AShareEarningEst, 'EST_NET_PROFIT', afunc_coverage, init_date)
+    factor = aligner.align(format_unstack_table(factor.pivot(index='trade_date', columns='ticker', values='factor')))
+    factor_size = size(AShareEODDerivativeIndicator, init_date)
+    factor_size = aligner.align(format_unstack_table(factor_size))
+    factor_size = winsorize_box(factor_size)
+    factor_size = weighted_stdd_zscore(factor_size, weight).astype(weight.values.dtype)
+    factor = __cross_sectional_regress(factor.values.astype(np.float64), factor_size.values.astype(np.float64), np.ones(factor.shape, dtype=np.float64))
+    factor = pd.DataFrame(factor, index=factor_size.index, columns=factor_size.columns)
+    factor = aligner.align(factor).fillna(value=0)
+    return factor.loc[init_date:]
 
 
 def listed_days(AShareDescription: pd.DataFrame, init_date: int, **kwargs) -> pd.DataFrame:
-    pass
+    aligner = Aligner()
+    df = AShareDescription[['S_INFO_WINDCODE', 'S_INFO_LISTDATE', 'S_INFO_DELISTDATE']]
+    df.columns = ['ticker', 'entry_date', 'remove_date']
+    df['remove_date'] = df['remove_date'].fillna(value=aligner.trade_dates.max())
+    df[['entry_date', 'remove_date']] = df[['entry_date', 'remove_date']].astype(int)
+    tickers = np.sort(np.unique(df['ticker']))
+    tickers_ix = dict(zip(tickers, np.arange(len(tickers))))
+    data = np.zeros((len(aligner.trade_dates), len(tickers)))
+    for i in range(len(df)):
+        ticker, entry_date, remove_date = df.iloc[i]
+        start = bisect_left(aligner.trade_dates, entry_date)
+        end = bisect_right(aligner.trade_dates, remove_date)
+        data[slice(start, end), tickers_ix[ticker]] = (pd.to_datetime(aligner.trade_dates[start:end].astype(str)) - pd.Timestamp(str(entry_date))).days.values
+    factor = pd.DataFrame(data, index=aligner.trade_dates, columns=tickers)
+    factor = aligner.align(format_unstack_table(factor))
+    return factor.loc[init_date:]
 
 
 # %% SOE
+def soe(AShareCapitalization: pd.DataFrame, init_date, **kwargs) -> pd.DataFrame:
+    aligner = Aligner()
+    calendar = Calendar()
+    data = AShareCapitalization[['ANN_DT', 'S_INFO_WINDCODE', 'S_SHARE_RTD_STATE', 'S_SHARE_RTD_STATEJUR', 'S_SHARE_NTRD_STATE', 'S_SHARE_NTRD_STATJUR', 'TOT_SHR', 'CHANGE_DT', 'CHANGE_DT1']]
+    data = data[data['ANN_DT'] >= str(init_date - 10000)]
+    data['ratio'] = (data['S_SHARE_RTD_STATE'] + data['S_SHARE_RTD_STATEJUR'] + data['S_SHARE_NTRD_STATE'] + data['S_SHARE_NTRD_STATJUR']) / data['TOT_SHR']
+    data = data.sort_values(['S_INFO_WINDCODE', 'ANN_DT', 'CHANGE_DT', 'CHANGE_DT1']).drop_duplicates(['S_INFO_WINDCODE', 'ANN_DT'], keep='last')
+    data = data.set_index(['ANN_DT', 'S_INFO_WINDCODE'])['ratio'].sort_index().unstack()
+    data = format_unstack_table(data)
+    day_map = {day: day if calendar.is_trade_date(day) else calendar.get_prev_trade_date(day, 1) for day in data.index}
+    data = data.stack().reset_index()
+    data.columns = ['ANN_DT', 'ticker', 'ratio']
+    data['trade_date'] = data['ANN_DT'].map(day_map)
+    data = data.sort_values(['ticker', 'trade_date', 'ANN_DT']).drop_duplicates(['trade_date', 'ticker'], keep='last')
+    data = format_unstack_table(data.pivot(index='trade_date', columns='ticker', values='ratio'))
+    factor = aligner.align(data).fillna(value=0)
+    return factor.loc[init_date:]

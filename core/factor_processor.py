@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-24 17:29:24
-LastEditTime: 2024-03-26 20:40:39
+LastEditTime: 2024-03-29 21:40:54
 '''
 
 import numpy as np
@@ -133,10 +133,10 @@ class AnalystFactorProcessor(FundamentalFactorProcessor):
         id_dict = {x: id(x) for x in arg.unique()}
         return arg.replace(id_dict)
     
-    def process(self, analyst_date, item, operator, init_date, return_factor=True):
-        assert item in analyst_date.columns
+    def process(self, analyst_data, item, operator, init_date, return_factor=True):
+        assert item in analyst_data.columns
         # 抓取目标数据
-        data = analyst_date.loc[analyst_date[self.fixed_fields['ann_dt']] >= str(init_date - 20000)][list(self.fixed_fields.values()) + [item]].copy()
+        data = analyst_data.loc[analyst_data[self.fixed_fields['ann_dt']] >= str(init_date - 20000)][list(self.fixed_fields.values()) + [item]].copy()
         # 转换机构名为ID
         data[self.fixed_fields['class_name']] = self.convert_to_id(data[self.fixed_fields['class_name']])
         # 日期数据转化为int

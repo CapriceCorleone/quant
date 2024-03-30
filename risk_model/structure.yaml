@@ -217,7 +217,7 @@
         - !!python/name:quant.risk_model.tools.weighted_stdd_zscore
     - name: "coverage"
       universe: null
-      weight: null
+      weight: "weight"
       formulas: !!python/name:quant.risk_model.formulas.coverage
       process:
         - !!python/name:quant.risk_model.tools.winsorize_box
@@ -232,6 +232,18 @@
   process:
     - !!python/name:quant.risk_model.tools.winsorize_box
     - !!python/name:quant.risk_model.tools.weighted_stdd_zscore
+
+- name: "soe"
+  type: "style"
+  subfactors:
+    - name: "soe"
+      universe: null
+      weight: null
+      num_process: null
+      formulas: !!python/name:quant.risk_model.formulas.soe
+      process:
+        - !!python/name:quant.risk_model.tools.winsorize_box
+        - !!python/name:quant.risk_model.tools.weighted_stdd_zscore
 
 - type: "industry"
   name:

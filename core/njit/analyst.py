@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-24 17:30:20
-LastEditTime: 2024-03-26 22:16:15
+LastEditTime: 2024-03-29 21:40:36
 '''
 
 import numpy as np
@@ -78,3 +78,23 @@ def afunc_consensus(m, annual_report, calendar, init_date, window=122, half_life
             w = w / w.sum()
             consensus[i, -1] = fy1 * w[0] + fy2 * w[1]
     return consensus[(consensus[:, 0] > 0) & np.isfinite(consensus[:, 1])]
+
+
+@njit
+def afunc_coverage(m, calendar, inint_date, window=122):
+    calendar = calendar.astype(np.float64)
+    m[:, 0] = replace_with_calendar(m[:, 0], calendar)
+    trade_dates = calendar[calendar >= inint_date]
+    trade_dates = trade_dates[trade_dates >= m[:, 0].min()]
+    init_ix = np.where(calendar == trade_dates[0])[0][0]
+    date_ix_dict = {calendar[i]: i for i in range(len(calendar))}
+    coverage = np.zeros((len(trade_dates), 2), dtype=np.float64) * np.nan
+    for i in range(len(trade_dates)):
+        current_ix = date_ix_dict[trade_dates[i]]
+        t_end = calendar[current_ix]
+        t_start = calendar[max(init_ix + i - window, 0)]
+        m_within = m[(m[:, 0] >= t_start) & (m[:, 0] <= t_end)]
+        count = len(np.unique(m_within[:, 1]))
+        coverage[i, 0] = t_end
+        coverage[i, 1] = count
+    return coverage
