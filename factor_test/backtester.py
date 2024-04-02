@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-20 22:36:50
-LastEditTime: 2024-03-27 19:26:55
+LastEditTime: 2024-03-31 23:19:38
 '''
 
 import time
@@ -102,7 +102,7 @@ class FactorTester:
             rebal_dates = self.calendar.week_ends
         else:
             raise Exception(f"Invalid frequency {frequency}")
-        return rebal_dates[(rebal_dates >= start_date) & (rebal_dates <= end_date)]
+        return rebal_dates[(rebal_dates >= start_date) & (rebal_dates < end_date)]
     
     def _cut_groups(self, f: pd.Series, ngroups):
         N = len(f)

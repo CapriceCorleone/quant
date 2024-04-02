@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-24 18:45:17
-LastEditTime: 2024-03-26 20:33:37
+LastEditTime: 2024-04-01 23:23:27
 '''
 
 import numpy as np
@@ -53,6 +53,20 @@ def ffunc_last(m):
 
 
 @njit
+def ffunc_shift(m, window=4):
+    result = np.zeros((len(m), 3), dtype=np.float64)
+    for i in range(len(m)):
+        ann_dt, period, f = m[i]
+        m_hist = m[(m[:, 0] <= ann_dt) & (m[:, 1] <= period)]
+        f_shift = get_target_period(m_hist, shift_period(period, window))
+        if f_shift is None:
+            continue
+        else:
+            result[i] = np.array([ann_dt, period, f_shift[-1]])
+    return result[result[:, 1] > 0]
+
+
+@njit
 def ffunc_mrq(m):
     result = np.zeros((len(m), 3), dtype=np.float64)
     for i in range(len(m)):
@@ -63,6 +77,24 @@ def ffunc_mrq(m):
             if f_last_quarter is None:
                 continue
             f = f - f_last_quarter[-1]
+        result[i] = np.array([ann_dt, period, f])
+    return result[result[:, 1] > 0]
+
+
+@njit
+def ffunc_mrhy(m):
+    # m = m[np.isin(m[:, 1] % 10000, [630, 1231])]
+    # m = m[(m[:, 1] % 10000 == 630) | (m[:, 1] % 10000 == 1231)]
+    result = np.zeros((len(m), 3), dtype=np.float64)
+    for i in range(len(m)):
+        ann_dt, period, f = m[i]
+        if m[i, 1] % 10000 == 1231:
+            m_hist = m[(m[:, 0] <= ann_dt) & (m[:, 1] <= period)]
+            f_last_half_year = get_target_period(m_hist, int(m[i, 1] - 1231 + 630))
+            if f_last_half_year is None:
+                continue
+            else:
+                f = f - f_last_half_year[-1]
         result[i] = np.array([ann_dt, period, f])
     return result[result[:, 1] > 0]
 
