@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-20 22:36:50
-LastEditTime: 2024-03-31 23:19:38
+LastEditTime: 2024-04-09 20:21:26
 '''
 
 import time
@@ -10,6 +10,7 @@ import pandas as pd
 import statsmodels.api as sm
 import matplotlib.pyplot as plt
 
+from ..conf import variables as V
 from ..core import DataLoader, Universe, Calendar, Aligner
 
 plt.rcParams['font.sans-serif'] = ['Microsoft YaHei']  # 设置中文显示
@@ -18,26 +19,9 @@ plt.rcParams['axes.unicode_minus'] = False  # 解决负号显示为方块的问�
 
 class FactorTester:
 
-    ANNUALIZE_MULTIPLIER = {
-        'D': 252,
-        'W': 52,
-        'M': 12,
-        'Q': 4,
-        'Y': 1,
-        5:   52,
-        10:  26,
-        20:  12
-    }
-
-    # RISK_STYLE_FACTORS = ['beta', 'earnings_yield', 'growth', 'leverage', 'liquidity', 'momentum', 'nlsize', 'size', 'value', 'volatility']
-    RISK_STYLE_FACTORS = ['size', 'beta', 'trend', 'liquidity', 'volatility', 'value', 'growth', 'nls', 'certainty', 'soe']
-
-    RISK_INDUSTRY_FACTORS = [
-        '交通运输', '传媒', '农林牧渔', '医药', '商贸零售', '国防军工', '基础化工', '家电',
-        '建材', '建筑', '房地产', '有色金属', '机械', '汽车', '消费者服务', '煤炭',
-        '电力及公用事业', '电力设备及新能源', '电子', '石油石化', '纺织服装', '综合',
-        '综合金融', '计算机', '轻工制造', '通信', '钢铁', '银行', '非银行金融', '食品饮料'
-    ]
+    ANNUALIZE_MULTIPLIER = V.ANNUALIZE_MULTIPLIER
+    RISK_STYLE_FACTORS = V.RISK_INDUSTRY_FACTORS
+    RISK_INDUSTRY_FACTORS = V.RISK_INDUSTRY_FACTORS
     
     def __init__(self, universe: pd.DataFrame, frequency: str, start_date: int, end_date: int, deal_price: str = 'preclose') -> None:
         self.dl = DataLoader(save=False)
