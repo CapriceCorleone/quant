@@ -215,12 +215,16 @@
       process:
         - !!python/name:quant.risk_model.tools.winsorize_box
         - !!python/name:quant.risk_model.tools.weighted_stdd_zscore
+        - !!python/name:quant.risk_model.tools.beat_briner_winsorize
+        - !!python/name:quant.risk_model.tools.weighted_stdd_zscore
     - name: "coverage"
       universe: null
       weight: "weight"
       formulas: !!python/name:quant.risk_model.formulas.coverage
       process:
         - !!python/name:quant.risk_model.tools.winsorize_box
+        - !!python/name:quant.risk_model.tools.weighted_stdd_zscore
+        - !!python/name:quant.risk_model.tools.beat_briner_winsorize
         - !!python/name:quant.risk_model.tools.weighted_stdd_zscore
     - name: "listed_days"
       universe: null

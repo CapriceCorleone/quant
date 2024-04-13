@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-23 21:28:59
-LastEditTime: 2024-03-24 13:39:00
+LastEditTime: 2024-04-13 21:50:44
 '''
 
 import numpy as np
@@ -41,3 +41,15 @@ def weighted_stdd_zscore(data, weight):
     std = data.std(axis=1)
     data = (data - mean.values[:, None]) / (std.values[:, None] + 1e-8)
     return data
+
+
+def beat_briner_winsorize(data: pd.DataFrame) -> pd.DataFrame:
+    s_plus = (0.5 / (data - 3).max(axis=1)).clip(None, 1).clip(0, None).values[:, None]
+    s_minus = (-0.5 / (data + 3).min(axis=1)).clip(None, 1).clip(0, None).values[:, None]
+    values = np.where(data.values > 3, 3 * (1 - s_plus) + data.values * s_plus, 0) + \
+        np.where(data.values < -3, -3 * (1 - s_minus) + data.values * s_minus, 0) + \
+        np.where((data.values >= -3) & (data.values <= 3), data.values, 0)
+    assert -3.51 <= values.min() <= values.max() <= 3.51
+    values[np.isnan(data.values)] = np.nan
+    data = pd.DataFrame(values, index=data.index, columns=data.columns)
+    return data.stack().sort_index()
