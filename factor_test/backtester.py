@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-20 22:36:50
-LastEditTime: 2024-04-13 15:42:19
+LastEditTime: 2024-04-14 00:27:48
 '''
 
 import time
@@ -10,6 +10,7 @@ import pandas as pd
 import statsmodels.api as sm
 import matplotlib.pyplot as plt
 
+from .. import conf
 from ..conf import variables as V
 from ..core import DataLoader, Universe, Calendar, Aligner
 
@@ -20,11 +21,13 @@ plt.rcParams['axes.unicode_minus'] = False  # 解决负号显示为方块的问�
 class FactorTester:
 
     ANNUALIZE_MULTIPLIER = V.ANNUALIZE_MULTIPLIER
-    RISK_STYLE_FACTORS = V.RISK_INDUSTRY_FACTORS
+    RISK_STYLE_FACTORS = V.RISK_STYLE_FACTORS
     RISK_INDUSTRY_FACTORS = V.RISK_INDUSTRY_FACTORS
     
     def __init__(self, universe: pd.DataFrame, frequency: str, start_date: int, end_date: int, deal_price: str = 'preclose') -> None:
         self.dl = DataLoader(save=False)
+        self.risk_model_dl = DataLoader(save=False)
+        self.risk_model_dl.root = conf.PATH_RISK_MODEL_DATA
         self.univ = Universe()
         self.universe = universe
         self.frequency = frequency
@@ -77,6 +80,11 @@ class FactorTester:
         upper = md.values + 1.483 * 3 * mad.values
         lncap = lncap.clip(lower[:, None], upper[:, None], axis=1)
         self.risk_model['lncap'] = self.aligner.align(lncap)
+
+        # style
+        for name in self.RISK_STYLE_FACTORS:
+            df = self.risk_model_dl.load(name)
+            self.risk_model[name] = self.aligner.align(df)
 
     def _get_rebal_dates(self, start_date: int, end_date: int, frequency: str):
         start_date = max(start_date, self.trade_dates[0])
@@ -220,18 +228,17 @@ class FactorTester:
         return ic_series, ric_series, tstats_series, ic_series_by_ind, ric_series_by_ind
     
     def calc_factor_style_corr(self, factor):
-        # style_corr_series = {}
-        # for i, day in enumerate(self.trade_dates):
-        #     f = factor.iloc[i]
-        #     style_corr = {}
-        #     for name in self.RISK_STYLE_FACTORS:
-        #         style = self.risk_model[name].iloc[i]
-        #         dat = pd.DataFrame({'factor': f, 'style': style}).dropna()
-        #         style_corr[name] = dat.corr(method='spearman').iloc[0, 1]
-        #     style_corr_series[day] = style_corr
-        # style_corr_series = pd.DataFrame(style_corr_series).T.dropna(how='all')
-        # return style_corr_series
-        return
+        style_corr_series = {}
+        for i, day in enumerate(self.trade_dates):
+            f = factor.iloc[i]
+            style_corr = {}
+            for name in self.RISK_STYLE_FACTORS:
+                style = self.risk_model[name].iloc[i]
+                dat = pd.DataFrame({'factor': f, 'style': style}).dropna()
+                style_corr[name] = dat.corr(method='spearman').iloc[0, 1]
+            style_corr_series[day] = style_corr
+        style_corr_series = pd.DataFrame(style_corr_series).T.dropna(how='all')
+        return style_corr_series
     
     def get_latest_score_info(self, factor):
         stock_description = self.dl.load('stock_description')
@@ -276,8 +283,8 @@ class FactorTester:
         output['ic_by_ind'] = ic_series_by_ind.mean()
         output['ric_series_by_ind'] = ric_series_by_ind
         output['ric_by_ind'] = ric_series_by_ind.mean()
-        # output['style_corr_series'] = style_corr_series
-        # output['style_corr'] = style_corr_series.mean()
+        output['style_corr_series'] = style_corr_series
+        output['style_corr'] = style_corr_series.mean()
         output['latest_score_info'] = latest_score_info
 
         years, year_counts = np.unique(self.rebal_dates // 10000, return_counts=True)
@@ -411,11 +418,11 @@ class FactorTester:
         output['ric_by_ind'].index.name = '行业'
         output['ric_by_ind'].name = 'ric_by_ind'
 
-        # output['style_corr_series'].index.name = ''
-        # output['style_corr_series'].index = pd.to_datetime(output['style_corr_series'].index.astype(str))
+        output['style_corr_series'].index.name = ''
+        output['style_corr_series'].index = pd.to_datetime(output['style_corr_series'].index.astype(str))
 
-        # output['style_corr'].index.name = '风格'
-        # output['style_corr'].name = 'style_corr'
+        output['style_corr'].index.name = '风格'
+        output['style_corr'].name = 'style_corr'
 
         output['performance'].index.name = '日期'
 
@@ -467,12 +474,12 @@ class FactorTester:
         ax.set_ylabel('')
         ax.set_title(f'IC by Industy ({factor_name})')
         
-        # # 风格因子相关系数
-        # fig, ax = plt.subplots(figsize=(10, 6), dpi=150)
-        # output['style_corr'].plot(ax=ax, kind='bar')
-        # ax.set_xlabel('')
-        # ax.set_ylabel('')
-        # ax.set_title(f'Correlation Coeffificents with Style Factors ({factor_name})')
+        # 风格因子相关系数
+        fig, ax = plt.subplots(figsize=(10, 6), dpi=150)
+        output['style_corr'].plot(ax=ax, kind='bar')
+        ax.set_xlabel('')
+        ax.set_ylabel('')
+        ax.set_title(f'Correlation Coeffificents with Style Factors ({factor_name})')
                     
     def test(self, factor: pd.DataFrame, ngroups: int = 10, display: bool = False, factor_name: str = None):
         factor = self.aligner.align(factor)
