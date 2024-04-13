@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-30 14:03:56
-LastEditTime: 2024-03-30 15:23:26
+LastEditTime: 2024-04-13 15:48:33
 '''
 
 import os
@@ -31,7 +31,8 @@ def get_init_date(roll_back=20):
 
 
 # %%
-init_date = get_init_date()
-rmm = RiskModelManager(conf.PATH_RISK_MODEL / 'structure.yaml', init_date=init_date)
-rmm.root = Path('./data/risk_model/')
-rmm.calc_exposure()
+if __name__ == "__main__":
+    init_date = get_init_date()
+    rmm = RiskModelManager(conf.PATH_RISK_MODEL / 'structure.yaml', init_date=init_date)
+    rmm.root = Path('./data/risk_model/')
+    rmm.calc_exposure()
