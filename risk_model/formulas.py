@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-23 21:28:39
-LastEditTime: 2024-03-29 22:52:27
+LastEditTime: 2024-04-13 21:30:08
 '''
 
 import numpy as np
@@ -396,89 +396,37 @@ def nls(AShareEODDerivativeIndicator: pd.DataFrame, init_date: int, **kwargs) ->
 
 
 # %% Certainty
-def instholder_pct(AShareEODPrices: pd.DataFrame, AShareEODDerivativeIndicator: pd.DataFrame, ChinaMutualFundStockPortfolio: pd.DataFrame, init_date: int, **kwargs) -> pd.DataFrame:
+def instholder_pct(AShareEODPrices: pd.DataFrame, AShareEODDerivativeIndicator: pd.DataFrame, ChinaMutualFundDescription: pd.DataFrame, ChinaMutualFundStockPortfolio: pd.DataFrame, init_date: int, **kwargs) -> pd.DataFrame:
     aligner = Aligner()
     calendar = Calendar()
-    ChinaMutualFundStockPortfolio = ChinaMutualFundStockPortfolio[ChinaMutualFundStockPortfolio['F_PRT_ENDDATE'].str[-4:].isin(['0331', '0630', '0930', '1231'])]
-    ChinaMutualFundStockPortfolio = ChinaMutualFundStockPortfolio[ChinaMutualFundStockPortfolio['S_INFO_STOCKWINDCODE'].str[-2:].isin(['SH', 'SZ', 'BJ'])]
-    ChinaMutualFundStockPortfolio = ChinaMutualFundStockPortfolio.sort_values(['S_INFO_WINDCODE', 'F_PRT_ENDDATE', 'F_PRT_STKVALUETONAV'], ascending=[True, True, False])
-    ChinaMutualFundStockPortfolio = ChinaMutualFundStockPortfolio[['S_INFO_WINDCODE', 'F_PRT_ENDDATE', 'S_INFO_STOCKWINDCODE', 'F_PRT_STKQUANTITY', 'F_PRT_STKVALUETONAV']]
-    ChinaMutualFundStockPortfolio = ChinaMutualFundStockPortfolio.fillna(value=0)
-    ChinaMutualFundStockPortfolio = ChinaMutualFundStockPortfolio[ChinaMutualFundStockPortfolio['F_PRT_ENDDATE'] >= str(init_date - 20000)]
-    quarter_trade_date_ends = calendar.trade_dates[(calendar.is_month_end == 1) & (calendar.month % 3 == 0)]
-    quarters = quarter_trade_date_ends // 100
-    quarter_dict = dict(zip(quarters, quarter_trade_date_ends))
-    close = AShareEODPrices['S_DQ_CLOSE'].unstack()
-    endix_1 = ChinaMutualFundStockPortfolio.groupby(['S_INFO_WINDCODE'])['F_PRT_STKQUANTITY'].count().cumsum()
-    sttix_1 = endix_1.shift(1).fillna(value=0).astype(int)
-    fund_codes = sttix_1.index.values
-
-    portfolios = []
-    for i in tqdm(range(len(sttix_1)), ncols=80, desc='instholder_pct'):
-        fund_code = fund_codes[i]
-        fund_data = ChinaMutualFundStockPortfolio.iloc[sttix_1.iloc[i] : endix_1.iloc[i]]
-        endix_2 = fund_data.groupby(['F_PRT_ENDDATE'])['F_PRT_STKQUANTITY'].count().cumsum()
-        sttix_2 = endix_2.shift(1).fillna(value=0).astype(int)
-        fund_data_filled = []
-        data_lst = None
-        for j in range(len(sttix_2)):
-            data = fund_data.iloc[sttix_2.iloc[j] : endix_2.iloc[j]]
-            if j == 0:
-                fund_data_filled.append(data)
-            else:
-                day = data['F_PRT_ENDDATE'].iloc[0]
-                if day[-4:] in ['0630', '1231']:
-                    fund_data_filled.append(data)
-                else:
-                    day_lst = data_lst['F_PRT_ENDDATE'].iloc[0]
-                    if day_lst[-4:] in ['0630', '1231']:
-                        tday = str(quarter_dict[int(day) // 100])
-                        price = close.loc[tday]
-                        ticker_quantity_lst = dict(zip(data_lst['S_INFO_STOCKWINDCODE'].values, data_lst['F_PRT_STKQUANTITY'].values))
-                        ticker_weight_lst = dict(zip(data_lst['S_INFO_STOCKWINDCODE'].values, data_lst['F_PRT_STKVALUETONAV'].values))
-                        minor_ticker = np.setdiff1d(data_lst['S_INFO_STOCKWINDCODE'].values[10:], data['S_INFO_STOCKWINDCODE'].values)
-                        minor_ticker = np.intersect1d(minor_ticker, price.index.values)
-                        if len(minor_ticker) == 0:
-                            fund_data_filled.append(data)
-                        else:
-                            minor_ticker_weight = np.array(list(map(lambda x: ticker_weight_lst[x], minor_ticker)))
-                            total_position_lst = data_lst['F_PRT_STKVALUETONAV'].sum()
-                            minor_position_lst = data_lst['F_PRT_STKVALUETONAV'].iloc[10:].sum()
-                            major_position = data['F_PRT_STKVALUETONAV'].sum()
-                            minor_position = max(total_position_lst - major_position, 0)
-                            major_ticker = data['S_INFO_STOCKWINDCODE'].values
-                            major_ticker_quantity = data['F_PRT_STKQUANTITY'].values
-                            major_ticker_close = price.loc[major_ticker].values
-                            major_ticker_value = np.nansum(major_ticker_quantity * major_ticker_close)
-                            minor_position_scale = minor_position / minor_position_lst if minor_position_lst > 0.01 else 0
-                            minor_ticker_weight_adj = minor_ticker_weight * minor_position_scale
-                            major_ticker_weight = data['F_PRT_STKVALUETONAV'].values
-                            minor_position_scale = min(major_ticker_weight) / max(minor_ticker_weight_adj) if max(minor_ticker_weight_adj) > 1e-6 else 0
-                            minor_ticker_weight_adj = minor_ticker_weight_adj * minor_position_scale
-                            minor_ticker_value = major_ticker_value / major_ticker_weight.sum() * minor_ticker_weight.sum() if minor_ticker_weight.sum() > 1e-4 else 0
-                            minor_ticker_close = price.loc[minor_ticker].values
-                            minor_ticker_quantity_adj = np.nan_to_num(minor_ticker_value * minor_ticker_weight_adj / 100 / minor_ticker_close, nan=0)
-                            data_minor = pd.DataFrame({'S_INFO_STOCKWINDCODE': minor_ticker, 'F_PRT_STKQUANTITY': minor_ticker_quantity_adj, 'F_PRT_STKVALUETONAV': minor_ticker_weight_adj}).dropna()
-                            data_minor.insert(0, 'F_PRT_ENDDATE', day)
-                            data_minor.insert(0, 'S_INFO_WINDCODE', fund_code)
-                            data_filled = pd.concat([data, data_minor], axis=0)
-                            fund_data_filled.append(data_filled)
-                    else:
-                        fund_data_filled.append(data)
-            data_lst = data
-        fund_data_filled = pd.concat(fund_data_filled, axis=0)
-        portfolios.append(fund_data_filled)
-    portfolios = pd.concat(portfolios, axis=0, ignore_index=True)
-
-    quantity = portfolios.groupby(['F_PRT_ENDDATE', 'S_INFO_STOCKWINDCODE'])['F_PRT_STKQUANTITY'].sum().unstack()
+    port_data = ChinaMutualFundStockPortfolio[ChinaMutualFundStockPortfolio['F_PRT_ENDDATE'] >= str(init_date - 20000)]
+    port_data = port_data[port_data['F_PRT_ENDDATE'].str[-4:].isin(['0630', '1231'])]
+    port_data = port_data[port_data['S_INFO_STOCKWINDCODE'].str[-2:].isin(['SH', 'SZ', 'BJ'])]
+    port_data['UNI_ANN_DT'] = port_data['F_PRT_ENDDATE'].apply(lambda x: (int(x[:4]) + 1) * 10000 + 430 if x[-4:] == '1231' else int(x[:4]) * 10000 + 831)
+    port_data = port_data[port_data['UNI_ANN_DT'] >= port_data['ANN_DATE'].astype(int)]
+    port_data = port_data[['S_INFO_WINDCODE', 'F_PRT_ENDDATE', 'S_INFO_STOCKWINDCODE', 'F_PRT_STKQUANTITY', 'F_PRT_STKVALUETONAV', 'UNI_ANN_DT']]
+    port_data = pd.merge(port_data, ChinaMutualFundDescription, left_on=['S_INFO_WINDCODE'], right_on=['F_INFO_WINDCODE'])
+    ann_dts = np.sort(np.unique(port_data['UNI_ANN_DT'].values))
+    ann_dts = ann_dts[ann_dts <= int(AShareEODDerivativeIndicator.index.levels[0].max())]
+    trade_ann_dts = np.array([i if calendar.is_trade_date(i) else calendar.get_prev_trade_date(i, 1) for i in ann_dts])
+    ann_dts_map = dict(zip(ann_dts, trade_ann_dts))
+    port_data['UNI_ANN_DT'] = port_data['UNI_ANN_DT'].map(ann_dts_map)
+    port_data = port_data.dropna(subset=['UNI_ANN_DT', 'S_INFO_STOCKWINDCODE', 'F_PRT_STKQUANTITY'])
+    port_data['UNI_ANN_DT'] = port_data['UNI_ANN_DT'].astype(int)
+    quantity = port_data.groupby(['UNI_ANN_DT', 'S_INFO_STOCKWINDCODE'])['F_PRT_STKQUANTITY'].sum().unstack()
+    shares = AShareEODDerivativeIndicator.loc[str(init_date - 20000):, 'FLOAT_A_SHR_TODAY'].unstack()
+    print(quantity)
+    print(quantity.index)
     quantity = format_unstack_table(quantity)
-    quantity.index = [day if calendar.is_trade_date(day) else calendar.get_prev_trade_date(day, n=1) for day in quantity.index]
-    quantity = format_unstack_table(quantity)
-    quantity = aligner.align(quantity)
-    float_share = format_unstack_table(AShareEODDerivativeIndicator.loc[str(init_date - 10000):, 'FLOAT_A_SHR_TODAY'].unstack())
-    float_share = aligner.align(float_share)
-    factor = (quantity / float_share).fillna(method='ffill').fillna(value=0)
-    close = aligner.align(format_unstack_table(close))
+    shares = format_unstack_table(shares)
+    shares = shares.reindex_like(quantity)
+    quantity[shares.isna() | (shares == 0)] = np.nan
+    factor = quantity / shares / 10000
+    print(factor)
+    factor = aligner.align(factor)
+    print(factor)
+    factor = factor.fillna(method='ffill', limit=180)
+    close = aligner.align(format_unstack_table(AShareEODPrices['S_DQ_CLOSE'].unstack()))
     factor[pd.isna(close)] = np.nan
     return factor.loc[init_date:]
 
