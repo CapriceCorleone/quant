@@ -17,6 +17,7 @@ from quant.core import Aligner, DataLoader, DataMaintainer, DataProcessor, AShar
 
 aligner = Aligner()
 init_date = aligner.trade_dates.max()
+init_date = 20050101
 
 
 # %%
