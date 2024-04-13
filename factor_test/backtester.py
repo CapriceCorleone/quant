@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-20 22:36:50
-LastEditTime: 2024-04-09 20:21:26
+LastEditTime: 2024-04-13 15:42:19
 '''
 
 import time
@@ -56,9 +56,12 @@ class FactorTester:
             self.stock_deal_price = self.stock_adjclose.shift(1)
 
     def _prepare_industry(self, name) -> None:
-        AShareIndustriesClassCITICS = self.dl.load('AShareIndustriesClassCITICS')
-        info = AShareIndustriesClassCITICS[AShareIndustriesClassCITICS['INDUSTRIESNAME'] == name][['S_INFO_WINDCODE', 'ENTRY_DT', 'REMOVE_DT']]
-        df = self.univ._format_universe(self.univ.arrange_info_table(info))
+        if V.RISK_INDUSTRY_TYPE  == 'zx':
+            AShareIndustriesClassCITICS = self.dl.load('AShareIndustriesClassCITICS')
+            info = AShareIndustriesClassCITICS[AShareIndustriesClassCITICS['INDUSTRIESNAME'] == name][['S_INFO_WINDCODE', 'ENTRY_DT', 'REMOVE_DT']]
+            df = self.univ._format_universe(self.univ.arrange_info_table(info))
+        else:
+            raise ValueError (f"目前只支持中信一级行业, {name}不属于中信一级行业.")
         return df
 
     def _prepare_risk_model(self) -> None:
