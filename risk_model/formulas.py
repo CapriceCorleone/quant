@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-23 21:28:39
-LastEditTime: 2024-04-13 21:30:08
+LastEditTime: 2024-04-14 02:47:56
 '''
 
 import numpy as np
@@ -415,16 +415,12 @@ def instholder_pct(AShareEODPrices: pd.DataFrame, AShareEODDerivativeIndicator: 
     port_data['UNI_ANN_DT'] = port_data['UNI_ANN_DT'].astype(int)
     quantity = port_data.groupby(['UNI_ANN_DT', 'S_INFO_STOCKWINDCODE'])['F_PRT_STKQUANTITY'].sum().unstack()
     shares = AShareEODDerivativeIndicator.loc[str(init_date - 20000):, 'FLOAT_A_SHR_TODAY'].unstack()
-    print(quantity)
-    print(quantity.index)
     quantity = format_unstack_table(quantity)
     shares = format_unstack_table(shares)
     shares = shares.reindex_like(quantity)
     quantity[shares.isna() | (shares == 0)] = np.nan
     factor = quantity / shares / 10000
-    print(factor)
     factor = aligner.align(factor)
-    print(factor)
     factor = factor.fillna(method='ffill', limit=180)
     close = aligner.align(format_unstack_table(AShareEODPrices['S_DQ_CLOSE'].unstack()))
     factor[pd.isna(close)] = np.nan
