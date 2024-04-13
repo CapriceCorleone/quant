@@ -31,6 +31,7 @@ class DataMaintainer:
         tickers = np.array([int(i[:6]) for i in tickers if i[0] in list('036')])
         os.makedirs(Aligner.index_path.parent, exist_ok=True)
         np.save(Aligner.index_path, {'trade_date': trade_dates, 'ticker': tickers})
+        self.aligner = Aligner()
     
     def update_stock_description(self) -> None:
         AShareDescription = self.dl.load('AShareDescription')
