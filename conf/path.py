@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-20 22:11:57
-LastEditTime: 2024-04-14 02:12:26
+LastEditTime: 2024-04-14 03:07:36
 '''
 
 from pathlib import Path
@@ -28,3 +28,9 @@ PATH_MODEL = PATH_PRODUCT / 'model'  # 模型生产框架
 PATH_DATA_MINUTE_BAR = {
     '1m': Path('E:/StkHFData/StockQuote1m/')
 }
+
+PATH_DATA_FEATURE = PATH_ROOT / 'feature'  # 特征数据
+PATH_DATA_LABEL = PATH_DATA_FEATURE / 'label'
+PATH_DATA_RISK_FACTOR = PATH_DATA_FEATURE / 'risk_model'
+PATH_DATA_DAILY_FEATURE = PATH_DATA_FEATURE / 'daily_bar_feature'
+PATH_DATA_MINUTE_FEATURE = PATH_DATA_FEATURE / 'minute_bar_feature'
