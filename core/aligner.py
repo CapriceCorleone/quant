@@ -28,7 +28,7 @@ class Aligner:
         return data.reindex(index=self.trade_dates, columns=self.tickers)
     
     def append(self, old: pd.DataFrame, new: pd.DataFrame) -> pd.DataFrame:
-        new = self.align(new)
+        new = self.align(new).dropna(how='all')
         old = old[old.index < new.index.min()]
         data = pd.concat([old, new], axis=0)
         return self.align(data)
