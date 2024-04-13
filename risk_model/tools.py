@@ -52,4 +52,4 @@ def beat_briner_winsorize(data: pd.DataFrame) -> pd.DataFrame:
     assert -3.51 <= values.min() <= values.max() <= 3.51
     values[np.isnan(data.values)] = np.nan
     data = pd.DataFrame(values, index=data.index, columns=data.columns)
-    return data.stack().sort_index()
+    return data
