@@ -99,6 +99,7 @@ class RiskModelManager:
         factors = {}
         subfactors = {}
         for config in self.structure:
+            print(config['name'])
             if config['type'] == 'market':
                 factor = pd.DataFrame(1, index=self.aligner.trade_dates, columns=self.aligner.tickers)
                 factors[config['name']] = factor
