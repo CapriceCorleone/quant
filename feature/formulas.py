@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-04-14 02:40:08
-LastEditTime: 2024-04-14 02:52:16
+LastEditTime: 2024-04-14 16:13:22
 '''
 
 import numpy as np
@@ -64,4 +64,9 @@ def weekly_bar(AShareEODPrices, init_date = 20050101):
         outputs[field_5d] = result.loc[str(init_date):]
     vwap5d = np.where(outputs['amount5d'] > 0, outputs['amount5d'] / outputs['volume5d'] * adj_factor * 10, outputs['close5d'])
     outputs['vwap5d'] = pd.DataFrame(vwap5d, columns=outputs['close5d'].columns, index=outputs['close5d'].index)
+    return outputs
+
+
+def risk_factor(FactorExposure, init_date = 20050101):
+    outputs = {k: v.loc[init_date:] for k, v in FactorExposure}
     return outputs

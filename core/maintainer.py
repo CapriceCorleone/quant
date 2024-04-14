@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-21 20:42:06
-LastEditTime: 2024-03-22 20:56:36
+LastEditTime: 2024-04-14 16:10:55
 '''
 
 import os
@@ -120,6 +120,12 @@ class DataMaintainer:
                 index_quote[k] = v
         with open(path, 'wb') as file:
             pickle.dump(index_quote, file)
+
+    def update_risk_model(self) -> None:
+        factor_exposure = pd.read_pickle(conf.PATH_RISK_MODEL_DATA / 'model/factor_exposure.pkl')
+        path = conf.PATH_DATA_BASIC / 'FactorExposure.pkl'
+        with open(path, 'wb') as file:
+            pickle.dump(factor_exposure, file)
 
 
 if __name__ == "__main__":
