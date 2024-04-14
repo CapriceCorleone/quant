@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-23 21:28:39
-LastEditTime: 2024-04-14 02:47:56
+LastEditTime: 2024-04-14 12:44:54
 '''
 
 import numpy as np
@@ -462,7 +462,7 @@ def listed_days(AShareDescription: pd.DataFrame, init_date: int, **kwargs) -> pd
 
 
 # %% SOE
-def soe(AShareCapitalization: pd.DataFrame, init_date, **kwargs) -> pd.DataFrame:
+def soe(AShareEODPrices: pd.DataFrame, AShareCapitalization: pd.DataFrame, init_date, **kwargs) -> pd.DataFrame:
     aligner = Aligner()
     calendar = Calendar()
     data = AShareCapitalization[['ANN_DT', 'S_INFO_WINDCODE', 'S_SHARE_RTD_STATE', 'S_SHARE_RTD_STATEJUR', 'S_SHARE_NTRD_STATE', 'S_SHARE_NTRD_STATJUR', 'TOT_SHR', 'CHANGE_DT', 'CHANGE_DT1']]
@@ -477,5 +477,7 @@ def soe(AShareCapitalization: pd.DataFrame, init_date, **kwargs) -> pd.DataFrame
     data['trade_date'] = data['ANN_DT'].map(day_map)
     data = data.sort_values(['ticker', 'trade_date', 'ANN_DT']).drop_duplicates(['trade_date', 'ticker'], keep='last')
     data = format_unstack_table(data.pivot(index='trade_date', columns='ticker', values='ratio'))
-    factor = aligner.align(data).fillna(value=0)
+    factor = aligner.align(data).fillna(method='ffill', limit=243).fillna(value=0)
+    close = aligner.align(format_unstack_table(AShareEODPrices['S_DQ_CLOSE'].unstack()))
+    factor[pd.isna(close)] = np.nan
     return factor.loc[init_date:]

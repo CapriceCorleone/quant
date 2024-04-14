@@ -246,7 +246,6 @@
       num_process: null
       formulas: !!python/name:quant.risk_model.formulas.soe
       process:
-        - !!python/name:quant.risk_model.tools.winsorize_box
         - !!python/name:quant.risk_model.tools.weighted_stdd_zscore
 
 - type: "industry"
