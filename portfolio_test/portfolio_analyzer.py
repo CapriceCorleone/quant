@@ -1,27 +1,31 @@
 '''
 Author: WangXiang
 Date: 2024-04-09 20:12:07
-LastEditTime: 2024-04-10 23:20:36
+LastEditTime: 2024-04-14 04:05:48
 '''
 
 import numpy as np
 import pandas as pd
 from typing import Dict, List, Tuple, Any
 
+from .. import conf
 from ..conf import variables as V
-from ..core import DataLoader, Calendar, Aligner
+from ..core import DataLoader, Calendar, Aligner, Universe
 
 
 class PortfolioAnalyzer:
 
     ANNUALIZE_MULTIPLIER = V.ANNUALIZE_MULTIPLIER
-    RISK_STYLE_FACTORS = V.RISK_INDUSTRY_FACTORS
+    RISK_STYLE_FACTORS = V.RISK_STYLE_FACTORS
     RISK_INDUSTRY_FACTORS = V.RISK_INDUSTRY_FACTORS
 
     def __init__(self, deal_price: str = 'vwap') -> None:
         self.dl = DataLoader(save=False)
+        self.risk_model_dl = DataLoader(save=False)
+        self.risk_model_dl.root = conf.PATH_RISK_MODEL_DATA
         self.calendar = Calendar()
         self.aligner = Aligner()
+        self.univ = Universe()
         self.trade_dates = self.aligner.trade_dates
         self.tickers = self.aligner.tickers
         self.deal_price = deal_price
@@ -30,19 +34,20 @@ class PortfolioAnalyzer:
 
     def _prepare_basic_set(self) -> None:
         basic_set = {
-            'stock_quote': self.dl.load('stock_quote', keys=list(set(['open', 'close', self.deal_price, 'adjfactor']))),
+            'stock_quote': self.dl.load('stock_quote', keys=list(set(['open', 'close', self.deal_price, 'adjfactor', 'amount']))),
             'index_quote': self.dl.load('index_quote')
         }
         self.stock_adjopen = basic_set['stock_quote']['open'] * basic_set['stock_quote']['adjfactor']
         self.stock_adjclose = basic_set['stock_quote']['close'] * basic_set['stock_quote']['adjfactor']
         self.stock_close_return = self.stock_adjclose / self.stock_adjclose.shift(1) - 1
-        self.stock_open_return  =self.stock_adjopen / self.stock_adjclose.shift(1) - 1
+        self.stock_open_return = self.stock_adjopen / self.stock_adjclose.shift(1) - 1
         if self.deal_price in ['open', 'vwap', 'close']:
             self.stock_deal_price = basic_set['stock_quote'][self.deal_price] * basic_set['stock_quote']['adjfactor']
             self.stock_sell_return = self.stock_deal_price / self.stock_adjclose.shift(1) - 1
             self.stock_buy_return = self.stock_adjclose / self.stock_deal_price - 1
         else:
             self.stock_deal_price = self.stock_adjclose.shift(1)
+        self.stock_amount = basic_set['stock_quote']['amount'] / 100000
 
     def _prepare_industry(self, name) -> None:
         AShareIndustriesClassCITICS = self.dl.load('AShareIndustriesClassCITICS')
@@ -64,6 +69,11 @@ class PortfolioAnalyzer:
         lncap = lncap.clip(lower[:, None], upper[:, None], axis=1)
         self.risk_model['lncap'] = self.aligner.align(lncap)
 
+        # style
+        for name in self.RISK_STYLE_FACTORS:
+            df = self.risk_model_dl.load(name)
+            self.risk_model[name] = self.aligner.align(df)
+
     def convert_portfolio_dataframe(self, portfolio: pd.DataFrame) -> Tuple[Dict[int, List[int]], Dict[int, List[float]]]:
         if portfolio.shape[1] == 3:
             portfolio.columns = ['trade_date', 'ticker', 'weight']
@@ -76,7 +86,7 @@ class PortfolioAnalyzer:
         holding = {}
         weight = {}
         for i in range(len(endix)):
-            port = portfolio.iloc[sttix[i]:endix[i]]
+            port = portfolio.iloc[sttix.iloc[i]:endix.iloc[i]]
             day = port['trade_date'].iloc[0]
             holding[day] = port['ticker'].values
             weight[day] = port['weight'].values
@@ -246,7 +256,7 @@ class PortfolioAnalyzer:
         index_code: str                = None,
         cost: float                    = 0.0015,
         deep: bool                     = False
-    ) -> None:
+    ) -> pd.DataFrame:
         
         performance = {}
 
@@ -364,3 +374,160 @@ class PortfolioAnalyzer:
             return performance.loc[items].astype(np.float64)
     
     P = calc_performance
+
+    def calc_portfolio_exposure(self, holding: Dict[int, List[int]], weight: Dict[int, List[float]] = None, adjust_weight: bool = True):
+        rebal_dates = np.array(sorted(list(holding.keys())))
+        next_rebal_dates = np.array([self.calendar.get_next_trade_date(i) for i in rebal_dates])
+        industry = {}
+        for name in self.RISK_INDUSTRY_FACTORS:
+            ind = self._prepare_industry(name).loc[min(rebal_dates):]
+            industry[name] = ind
+        daily_exposure = {}
+        from tqdm import tqdm
+        for i in tqdm(range(len(self.trade_dates)), ncols=80):
+            day = self.trade_dates[i]
+            if day < rebal_dates[0]:
+                continue
+            if day == rebal_dates[0]:
+                lst_p, lst_w = None, None
+                continue
+            last_rebal_date = rebal_dates[rebal_dates < day][-1]
+            if day in next_rebal_dates:
+                # 调仓日
+                cur_p = holding[last_rebal_date]
+                if weight is None:
+                    cur_w = np.ones(len(cur_p)) / len(cur_p)
+                else:
+                    cur_w = weight[last_rebal_date]
+                if adjust_weight:
+                    if day == next_rebal_dates[0]:
+                        # 第一个调仓日：以昨收盘价买入
+                        ret = self.stock_close_return.loc[day, cur_p].fillna(value=0).values
+                        cur_w = cur_w * (1 + ret)
+                        cur_w = cur_w / cur_w.sum()
+                    else:
+                        # 不是第一个调仓日：按照deal_price类型进行调仓
+                        cross_p = np.unique(lst_p.tolist() + cur_p.tolist())
+                        if self.deal_price == 'preclose':
+                            # 以昨收盘价调仓
+                            ret = self.stock_close_return.loc[day, cur_p].fillna(value=0).values
+                            cur_w = cur_w * (1 + ret)
+                            cur_w = cur_w / cur_w.sum()
+                        else:
+                            # 不是以昨收盘价调仓
+                            ret_sell = self.stock_sell_return.loc[day, lst_p].fillna(value=0).values
+                            ret_buy = self.stock_buy_return.loc[day, cur_p].fillna(value=0).values
+                            lst_w = lst_w * (1 + ret_sell)
+                            lst_w = lst_w / lst_w.sum()
+                            cur_w = cur_w * (1 + ret_buy)
+                            cur_w = cur_w / cur_w.sum()
+                lst_p = cur_p
+                lst_w = cur_w
+            else:
+                # 非调仓日
+                if adjust_weight:
+                    ret = self.stock_close_return.loc[day, lst_p].fillna(value=0).values
+                    lst_w = lst_w * (1 + ret)
+                    lst_w = lst_w / lst_w.sum()
+            daily_exp = []
+            for name in self.RISK_STYLE_FACTORS:
+                exp = (self.risk_model[name].loc[day, lst_p].fillna(value=0) * lst_w).sum()
+                daily_exp.append(exp)
+            for name in self.RISK_INDUSTRY_FACTORS:
+                exp = (industry[name].loc[day, lst_p].fillna(value=0) * lst_w).sum()
+                daily_exp.append(exp)
+            daily_exposure[day] = daily_exp
+        daily_exposure = pd.DataFrame(daily_exposure, index=self.RISK_STYLE_FACTORS + self.RISK_INDUSTRY_FACTORS).T
+        return daily_exposure
+
+    def calc_attribution(
+        self,
+        portfolio: pd.DataFrame        = None,
+        holding: Dict[int, List[int]]  = None,
+        weight: Dict[int, List[float]] = None,
+        index_code: str                = None,
+    ) -> pd.DataFrame:
+        
+        result = {}
+        
+        if portfolio is not None:  # 可以传入形如trade_date, ticker或trade_date, ticker, weight的dataframe表示持仓
+            holding, weight = self.convert_portfolio_dataframe(portfolio)
+        start_date = min(list(holding.keys()))
+
+        # 若指定index_code，则获取index_code对应的持仓和权重
+        if index_code is not None:
+            if index_code == '000300.SH':
+                AIndexHS300CloseWeight = self.dl.load('AIndexHS300CloseWeight')
+                portfolio = AIndexHS300CloseWeight[['TRADE_DT', 'S_CON_WINDCODE', 'I_WEIGHT']]
+            else:
+                AIndexHS300FreeWeight = self.dl.load('AIndexHS300FreeWeight')
+                portfolio = AIndexHS300FreeWeight.loc(axis=0)[:, index_code].reset_index()
+                portfolio = portfolio[['TRADE_DT', 'S_CON_WINDCODE', 'I_WEIGHT']]
+            portfolio['TRADE_DT'] = portfolio['TRADE_DT'].astype(int)
+            portfolio = portfolio[portfolio['TRADE_DT'] >= start_date]
+            portfolio = portfolio[portfolio['S_CON_WINDCODE'].str[:1].isin(list('036'))]
+            portfolio['S_CON_WINDCODE'] = portfolio['S_CON_WINDCODE'].str[:6].astype(int)
+            portfolio['I_WEIGHT'] = portfolio.groupby('TRADE_DT')['I_WEIGHT'].transform(lambda x: x / x.sum())
+            holding_index, weight_index = self.convert_portfolio_dataframe(portfolio)
+
+        # 组合风格和行业暴露
+        portf_exposure = self.calc_portfolio_exposure(holding, weight, adjust_weight=True)
+        if index_code is not None:
+            index_exposure = self.calc_portfolio_exposure(holding_index, weight_index, adjust_weight=False)
+            index_exposure = index_exposure.reindex_like(portf_exposure)
+        else:
+            index_exposure = portf_exposure * 0.0
+        excess_exposure = portf_exposure - index_exposure
+        result['exposure'] = {
+            'portfolio': portf_exposure,
+            'basis': index_exposure,
+            'excess': excess_exposure
+        }
+
+        # 收益归因
+        # TODO
+
+        # 个股超额收益贡献
+        # TODO
+
+        return result
+    
+    A = calc_attribution
+
+    def calc_capacity(
+        self,
+        portfolio: pd.DataFrame        = None,
+        holding: Dict[int, List[int]]  = None,
+        weight: Dict[int, List[float]] = None, 
+    ):
+        if portfolio is not None:  # 可以传入形如trade_date, ticker或trade_date, ticker, weight的dataframe表示持仓
+            holding, weight = self.convert_portfolio_dataframe(portfolio)
+        rebal_dates = np.array(sorted(list(holding.keys())))
+        next_rebal_dates = np.array([self.calendar.get_next_trade_date(i) for i in rebal_dates])
+        daily_amount = []
+        for i in range(len(self.trade_dates)):
+            day = self.trade_dates[i]
+            if day <= rebal_dates[0]:
+                continue
+            last_rebal_date = rebal_dates[rebal_dates < day][-1]
+            if day in next_rebal_dates:
+                # 调仓日
+                cur_p = holding[last_rebal_date]
+                if weight is None:
+                    cur_w = np.ones(len(cur_p)) / len(cur_p)
+                else:
+                    cur_w = weight[last_rebal_date]
+                cur_amount = self.stock_amount.loc[day, cur_p].values
+            else:
+                # 非调仓日
+                continue
+            daily_amount.append([day, cur_amount.sum(), (cur_amount * cur_w).sum(),
+                                 cur_amount.min(), cur_w[cur_amount.argmin()],
+                                 cur_amount.max(), cur_w[cur_amount.argmax()],
+                                 cur_w.min(), cur_amount[cur_w.argmin()],
+                                 cur_w.max(), cur_amount[cur_w.argmax()]])
+        daily_amount = pd.DataFrame(daily_amount, columns=['trade_date', 'total_amount', 'avg_amount', 'min_amount', 'min_amount_weight', 'max_amount', 'max_amount_weight', 'min_weight', 'min_weight_amount', 'max_weight', 'max_weight_amount'])
+        daily_amount = daily_amount.set_index('trade_date').astype(np.float64)
+        daily_amount.index = pd.to_datetime(daily_amount.index.astype(str))
+        daily_amount.insert(0, 'est_capacity', daily_amount['total_amount'] * 0.1)  # 假设交易占比10%
+        return daily_amount
