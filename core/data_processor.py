@@ -41,7 +41,7 @@ class DataProcessor:
         self.dl = DataLoader()
         self.roll_back = roll_back
 
-    def run(self) -> None:
+    def run(self, init_date: int) -> None:
         for task in self.task_list:
             print(f'{datetime.now()}: Processing table [{task.__name__}]')
             path = self.root / f'{task.__name__}.pkl'

@@ -1,14 +1,15 @@
 '''
 Author: WangXiang
 Date: 2024-03-30 14:03:56
-LastEditTime: 2024-03-30 15:23:26
+LastEditTime: 2024-04-13 21:21:48
 '''
 
 import os
 os.chdir('E:/quant/produce/')
-
 import sys
 sys.path.append('E:/')
+import warnings
+warnings.filterwarnings('ignore')
 
 import numpy as np
 import pandas as pd
@@ -20,7 +21,7 @@ from quant.risk_model import RiskModelManager
 
 # %%
 def get_init_date(roll_back=20):
-    file = conf.PATH_RISK_MODEL_DATA / 'factor_exposure.pkl'
+    file = conf.PATH_RISK_MODEL_DATA / 'model/factor_exposure.pkl'
     if file.exists():
         data = pd.read_pickle(file)
         index = np.sort(data[list(data.keys())[0]].index.values)
@@ -31,7 +32,9 @@ def get_init_date(roll_back=20):
 
 
 # %%
-init_date = get_init_date()
-rmm = RiskModelManager(conf.PATH_RISK_MODEL / 'structure.yaml', init_date=init_date)
-rmm.root = Path('./data/risk_model/')
-rmm.calc_exposure()
+if __name__ == "__main__":
+    init_date = get_init_date()
+    rmm = RiskModelManager(conf.PATH_RISK_MODEL / 'structure.yaml', init_date=20081231)
+    # factor = rmm.calc_risk_subfactor(rmm.structure[9]['subfactors'][0])
+    # factor, subfactor = rmm.calc_risk_factor(rmm.structure[9])
+    rmm.calc_exposure()

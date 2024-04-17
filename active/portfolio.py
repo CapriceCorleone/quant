@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-31 10:18:30
-LastEditTime: 2024-04-01 19:57:08
+LastEditTime: 2024-04-11 19:28:30
 '''
 
 import numpy as np
@@ -223,12 +223,15 @@ class ActivePortfolio:
                     else:
                         print(f'In portfolio [{portfolio_name}] ...\nAt day [{day}], filter of [{factor_name}] is skipped otherwise will lead to empty portfolio.\n', '-'*60)
             holding[day] = h
-            w = weights[weight_name].loc[day, h].fillna(value=0).values
-            if w.sum() == 0:
-                print(f'In portfolio [{portfolio_name}] ...\nAat day [{day}], original weights are all zeros, set the final weights to equal.', '-'*60)
-                w = np.ones_like(w) / len(w)
+            if weights[weight_name] is None:
+                w = np.ones_like(h) / len(h)  # equal
             else:
-                w = w / w.sum()
+                w = weights[weight_name].loc[day, h].fillna(value=0).values
+                if w.sum() == 0:
+                    print(f'In portfolio [{portfolio_name}] ...\nAat day [{day}], original weights are all zeros, set the final weights to equal.', '-'*60)
+                    w = np.ones_like(w) / len(w)
+                else:
+                    w = w / w.sum()
             weight[day] = w
         daily_return, daily_turnover = self.calc_portfolio_return_and_turnover(holding, weight)
         daily_return = pd.Series(daily_return, name=portfolio_name)
@@ -257,9 +260,13 @@ class ActivePortfolio:
         bmk_cols = active_bmk_names.copy()
         if index_bmk_codes is not None:
             AIndexEODPrices = self.dl.load('AIndexEODPrices')
+            AWindIndexEODPrices = self.dl.load('AWindIndexEODPrices')
             for i in range(len(index_bmk_codes)):
                 code = index_bmk_codes[i]
-                ret = AIndexEODPrices.loc(axis=0)[:, code]['S_DQ_PCTCHANGE'].droplevel(1) / 100
+                if code[-2:] == 'WI':
+                    ret = AWindIndexEODPrices.loc(axis=0)[:, code]['S_DQ_PCTCHANGE'].droplevel(1) / 100
+                else:
+                    ret = AIndexEODPrices.loc(axis=0)[:, code]['S_DQ_PCTCHANGE'].droplevel(1) / 100
                 ret.index = ret.index.astype(int)
                 ret.index.name = active_portfolios.index.name
                 ret = ret.reindex(index=active_portfolios.index)
