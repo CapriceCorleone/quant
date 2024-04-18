@@ -16,7 +16,7 @@ class ModuleManager:
         attr_names = dir(m)
         for attr_name in attr_names:
             attr = getattr(m, attr_name)
-            if not callable(m, attr):
+            if not callable(attr):
                 continue
             if attr_name in self.module_functions.keys():
                 print(f"[Warning]: {attr_name} ahs been already registered (source: {self.module_functions[attr_name]['__name__']}), the function with the same name for module {m.__name__} will be ignored.")

@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-04-14 03:06:25
-LastEditTime: 2024-04-14 03:43:19
+LastEditTime: 2024-04-18 21:30:47
 '''
 
 import os
@@ -98,7 +98,7 @@ class MinuteBarFeatureManager:
 
     roll_back = 20
 
-    def __init__(self, feature_list, frequency, num_processes = 4, formualas = [formulas], feature_dir = conf.path.PATH_DATA_MINUTE_FEATURE, cupy = True) -> None:
+    def __init__(self, feature_list, frequency, num_processes = 4, formulas = [formulas], feature_dir = conf.path.PATH_DATA_MINUTE_FEATURE, cupy = True) -> None:
         self.feature_list = feature_list
         self.feature_dir = feature_dir
         self.aligner = Aligner()
@@ -107,7 +107,7 @@ class MinuteBarFeatureManager:
         self.trade_dates = self.aligner.trade_dates
         self.bar_loader = MinuteBarLoader(frequency)
         self.num_processes = num_processes
-        self.formulas = ModuleManager(formualas)()
+        self.formulas = ModuleManager(formulas)()
         self.cupy = cupy
     
     def calc_feature_at_date(self, date):
@@ -126,6 +126,7 @@ class MinuteBarFeatureManager:
                     feature_data = quote.to_array(cp.asnumpy(feature_data.squeeze()))
                 else:
                     feature_data = quote.to_array(feature_data.squeeze())
+            result[feature] = feature_data
         del quote
         if self.cupy:
             self.free_cupy_memory()
