@@ -75,5 +75,8 @@ if __name__ == "__main__":
     # Risk Model
     rmm = RiskModelManager('./risk_model/structure.yaml', init_date=20231101)
     factor = rmm.calc_risk_subfactor(rmm.structure[10]['subfactors'][0])
-    factor = rmm.calc_risk_factor(rmm.structure[9])
-    factor = rmm.calc_exposure()
+    # factor = rmm.calc_exposure()
+
+    # Portfolio Analyzer
+    from quant.portfolio_test import PortfolioAnalyzer
+    pa = PortfolioAnalyzer()
