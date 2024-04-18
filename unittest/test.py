@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-21 20:25:56
-LastEditTime: 2024-03-29 21:46:31
+LastEditTime: 2024-04-18 21:32:28
 '''
 
 import os
@@ -18,8 +18,11 @@ from quant.core import (
     format_unstack_table, winsorize_mad, stdd_zscore, orthogonalize, orthogonalize_monthend,
     AShareConsensus, FamaFrench3Factor
 )
+from quant.core import MinuteBarLoader
 from quant.factor_test import FactorTester
 from quant.risk_model import RiskModelManager
+from quant.portfolio_test import PortfolioAnalyzer
+from quant.feature import MinuteBar, MinuteBarFeatureManager
 
 
 if __name__ == "__main__":
@@ -37,6 +40,7 @@ if __name__ == "__main__":
     dm.update_stock_quote(20050101)
     dm.update_stock_size(20050101)
     dm.update_index_quote(20050101)
+    dm.update_risk_model()
 
     # DataProcessor
     dp = DataProcessor([AShareConsensus, FamaFrench3Factor])
@@ -58,22 +62,33 @@ if __name__ == "__main__":
     month_ends = calendar.month_ends
 
     # Factor Tester
-    factor = pd.read_pickle('D:/peiyq/民生/状态波动率/data/factor/processed/rvol_c2c/rvol_c2c_vstd20.pkl')
+    factor = pd.read_pickle('D:/peiyq/民生/权重巨振/data/factor/processed/amount_beta/amount_beta_mean20.pkl')
     factor = factor.pivot(index='trade_date', columns='ticker', values='factor')
     factor = format_unstack_table(factor)
 
-    universe = univ(listed_days=120, continuous_trade_days=20, include_st=False, include_suspend=False, include_price_limit=False)
+    universe = univ(listed_days=120, continuous_trade_days=20, include_st=False, include_suspend=False, include_price_limit=False, index_code='399303.SZ')
     ft = FactorTester(universe, 'M', 20161230, 20231229, 'vwap')
 
     factor_stan = stdd_zscore(winsorize_mad(factor))
 
     factor_orth = orthogonalize(factor_stan, ft.risk_model['lncap'], *list(map(lambda x: ft._prepare_industry(x), ft.RISK_INDUSTRY_FACTORS)))
-    factor_orth = orthogonalize_monthend(factor_stan, ft.risk_model['lncap'], *list(map(lambda x: ft._prepare_industry(x), ft.RISK_INDUSTRY_FACTORS)))
+    # factor_orth = orthogonalize_monthend(factor_stan, ft.risk_model['lncap'], *list(map(lambda x: ft._prepare_industry(x), ft.RISK_INDUSTRY_FACTORS)))
 
-    output = ft.test(factor_orth, 10, True)
+    output = ft.test(-factor_orth, 20, True)
 
     # Risk Model
     rmm = RiskModelManager('./risk_model/structure.yaml', init_date=20231101)
     factor = rmm.calc_risk_subfactor(rmm.structure[10]['subfactors'][0])
     factor = rmm.calc_risk_factor(rmm.structure[9])
     factor = rmm.calc_exposure()
+
+    # Portfolio Analyzer
+    pa = PortfolioAnalyzer()
+    
+    # minute bar
+    bar_loader = MinuteBarLoader('1m')
+    data = bar_loader[20230101:20231231]
+    bar = MinuteBar(data[100])
+
+    # minute bar calculation
+    mbf = MinuteBarFeatureManager()

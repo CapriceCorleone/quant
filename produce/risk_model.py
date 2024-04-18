@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-30 14:03:56
-LastEditTime: 2024-04-13 21:21:48
+LastEditTime: 2024-04-14 21:10:47
 '''
 
 import os
@@ -35,6 +35,6 @@ def get_init_date(roll_back=20):
 if __name__ == "__main__":
     init_date = get_init_date()
     rmm = RiskModelManager(conf.PATH_RISK_MODEL / 'structure.yaml', init_date=20081231)
-    # factor = rmm.calc_risk_subfactor(rmm.structure[9]['subfactors'][0])
-    # factor, subfactor = rmm.calc_risk_factor(rmm.structure[9])
+    # factor = rmm.calc_risk_subfactor(rmm.structure[10]['subfactors'][0])
+    factor, subfactor = rmm.calc_risk_factor(rmm.structure[10])
     rmm.calc_exposure()

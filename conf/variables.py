@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-04-09 20:16:20
-LastEditTime: 2024-04-14 03:07:57
+LastEditTime: 2024-04-14 21:51:51
 '''
 
 
@@ -16,7 +16,8 @@ ANNUALIZE_MULTIPLIER = {
     20:  12
 }
 
-RISK_STYLE_FACTORS = ['size', 'beta', 'trend', 'liquidity', 'volatility', 'value', 'growth', 'nls', 'certainty', 'soe']
+# RISK_STYLE_FACTORS = ['size', 'beta', 'trend', 'liquidity', 'volatility', 'value', 'growth', 'nls', 'certainty', 'soe']
+RISK_STYLE_FACTORS = ['beta', 'earnings_yield', 'growth', 'leverage', 'liquidity', 'momentum', 'nlsize', 'size', 'value', 'volatility']
 
 INDUSTRY_NAMES = {
     'zx': [

@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-04-09 20:12:07
-LastEditTime: 2024-04-14 04:05:48
+LastEditTime: 2024-04-14 21:44:47
 '''
 
 import numpy as np
@@ -10,7 +10,7 @@ from typing import Dict, List, Tuple, Any
 
 from .. import conf
 from ..conf import variables as V
-from ..core import DataLoader, Calendar, Aligner, Universe
+from ..core import DataLoader, Calendar, Aligner, Universe, format_unstack_table
 
 
 class PortfolioAnalyzer:
@@ -71,7 +71,9 @@ class PortfolioAnalyzer:
 
         # style
         for name in self.RISK_STYLE_FACTORS:
-            df = self.risk_model_dl.load(name)
+            # df = self.risk_model_dl.load(name)
+            df = pd.read_pickle(f'D:/peiyq/backtest/data/barra_ms/{name}.pkl')
+            df = format_unstack_table(df)
             self.risk_model[name] = self.aligner.align(df)
 
     def convert_portfolio_dataframe(self, portfolio: pd.DataFrame) -> Tuple[Dict[int, List[int]], Dict[int, List[float]]]:
