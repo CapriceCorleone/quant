@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-04-20 14:35:29
-LastEditTime: 2024-04-20 15:28:05
+LastEditTime: 2024-04-20 15:54:19
 '''
 
 import os
@@ -101,7 +101,7 @@ class SimpleLabelManager(LabelManager):
 
 class SimilarLabelManager(SimpleLabelManager):
 
-    def __init__(self, window: int, similar_window: int, skip: int = 1, buy: str = 'close', num_similar: int = 30, label_name: str = 'simple', dir_label=conf.PATH_DATA_LABEL) -> None:
+    def __init__(self, window: int, similar_window: int, skip: int = 1, buy: str = 'close', num_similar: int = 30, label_name: str = 'similar', dir_label=conf.PATH_DATA_LABEL) -> None:
         super().__init__(window, skip, buy, label_name, dir_label)
         self.similar_window = similar_window
         self.num_similar = num_similar
