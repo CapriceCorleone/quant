@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-03-23 21:28:39
-LastEditTime: 2024-04-14 12:44:54
+LastEditTime: 2024-04-20 16:08:38
 '''
 
 import numpy as np
@@ -10,6 +10,7 @@ import multiprocessing as mp
 from tqdm import tqdm
 from numba import njit
 from scipy import stats
+from datetime import datetime
 from bisect import bisect_left, bisect_right
 
 from ..core import Aligner, Calendar, Universe, Processors, format_unstack_table
@@ -396,7 +397,7 @@ def nls(AShareEODDerivativeIndicator: pd.DataFrame, init_date: int, **kwargs) ->
 
 
 # %% Certainty
-def instholder_pct(AShareEODPrices: pd.DataFrame, AShareEODDerivativeIndicator: pd.DataFrame, ChinaMutualFundDescription: pd.DataFrame, ChinaMutualFundStockPortfolio: pd.DataFrame, init_date: int, **kwargs) -> pd.DataFrame:
+def instholder_pct(AShareEODPrices: pd.DataFrame, AShareEODDerivativeIndicator: pd.DataFrame, ChinaMutualFundStockPortfolio: pd.DataFrame, init_date: int, **kwargs) -> pd.DataFrame:
     aligner = Aligner()
     calendar = Calendar()
     port_data = ChinaMutualFundStockPortfolio[ChinaMutualFundStockPortfolio['F_PRT_ENDDATE'] >= str(init_date - 20000)]
@@ -405,23 +406,29 @@ def instholder_pct(AShareEODPrices: pd.DataFrame, AShareEODDerivativeIndicator: 
     port_data['UNI_ANN_DT'] = port_data['F_PRT_ENDDATE'].apply(lambda x: (int(x[:4]) + 1) * 10000 + 430 if x[-4:] == '1231' else int(x[:4]) * 10000 + 831)
     port_data = port_data[port_data['UNI_ANN_DT'] >= port_data['ANN_DATE'].astype(int)]
     port_data = port_data[['S_INFO_WINDCODE', 'F_PRT_ENDDATE', 'S_INFO_STOCKWINDCODE', 'F_PRT_STKQUANTITY', 'F_PRT_STKVALUETONAV', 'UNI_ANN_DT']]
-    port_data = pd.merge(port_data, ChinaMutualFundDescription, left_on=['S_INFO_WINDCODE'], right_on=['F_INFO_WINDCODE'])
     ann_dts = np.sort(np.unique(port_data['UNI_ANN_DT'].values))
-    ann_dts = ann_dts[ann_dts <= int(AShareEODDerivativeIndicator.index.levels[0].max())]
+    current_date = int(datetime.now().date().strftime('%Y%m%d'))
+    ann_dts = ann_dts[ann_dts <= current_date]  # 需要考虑公布日是月底，但非交易日的情况
+
     trade_ann_dts = np.array([i if calendar.is_trade_date(i) else calendar.get_prev_trade_date(i, 1) for i in ann_dts])
     ann_dts_map = dict(zip(ann_dts, trade_ann_dts))
     port_data['UNI_ANN_DT'] = port_data['UNI_ANN_DT'].map(ann_dts_map)
     port_data = port_data.dropna(subset=['UNI_ANN_DT', 'S_INFO_STOCKWINDCODE', 'F_PRT_STKQUANTITY'])
     port_data['UNI_ANN_DT'] = port_data['UNI_ANN_DT'].astype(int)
+    
     quantity = port_data.groupby(['UNI_ANN_DT', 'S_INFO_STOCKWINDCODE'])['F_PRT_STKQUANTITY'].sum().unstack()
     shares = AShareEODDerivativeIndicator.loc[str(init_date - 20000):, 'FLOAT_A_SHR_TODAY'].unstack()
     quantity = format_unstack_table(quantity)
     shares = format_unstack_table(shares)
     shares = shares.reindex_like(quantity)
     quantity[shares.isna() | (shares == 0)] = np.nan
+    
     factor = quantity / shares / 10000
     factor = aligner.align(factor)
-    factor = factor.fillna(method='ffill', limit=180)
+    is_all_nan = (factor.isna().sum(axis=1) == factor.shape[1]).values
+    for i in range(factor.shape[0]):
+        if is_all_nan[i]:
+            factor.iloc[i] = factor.iloc[i - 1]
     close = aligner.align(format_unstack_table(AShareEODPrices['S_DQ_CLOSE'].unstack()))
     factor[pd.isna(close)] = np.nan
     return factor.loc[init_date:]
