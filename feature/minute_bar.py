@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-04-14 03:06:25
-LastEditTime: 2024-04-18 21:30:47
+LastEditTime: 2024-04-20 21:14:47
 '''
 
 import os
@@ -35,6 +35,28 @@ if has_cupy():
     device.use()
     mempool = cp.get_default_memory_pool()
     pinned_mempool = cp.get_default_pinned_memory_pool()
+
+
+def validate_bar(df: pd.DataFrame) -> pd.DataFrame:
+    
+    df = df.reset_index()
+    
+    # convert ticker code to int and sort
+    index_col = ['date', 'time', 'ticker']
+    df['ticker'] = df['ticker'].str[-6:].astype(int)
+    df = df.sort_values(['time', 'ticker'])
+    
+    # drop bad samples
+    ticker_count = df['ticker'].value_counts()
+    ticker_invalid = ticker_count.loc[ticker_count != ticker_count.max()].index.values
+    df = df.loc[~df.ticker.isin(ticker_invalid)]
+    df = df.reset_index(drop=True)
+    
+    # convert dtype to category and float32
+    df[index_col] = df[index_col].astype(int).astype('category')
+    df[df.columns.difference(index_col)] = df[df.columns.difference(index_col)].astype(np.float32)
+
+    return df
 
 
 class MinuteBar:
