@@ -1,18 +1,15 @@
 '''
 Author: WangXiang
 Date: 2024-04-19 22:50:26
-LastEditTime: 2024-04-20 14:31:55
+LastEditTime: 2024-04-20 15:44:00
 '''
 
 import os
 import gc
-import copy
 import time
-import pickle
 import numpy as np
 import pandas as pd
 import lightgbm as lgb
-from tqdm import tqdm
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Tuple, Any
@@ -26,7 +23,6 @@ from torch import Tensor
 from transformers.modeling_utils import PreTrainedModel
 from transformers.configuration_utils import PretrainedConfig
 
-from .. import conf
 from ..core import Aligner
 
 
@@ -72,7 +68,7 @@ def match_and_load_state_dict(cls: PreTrainedModel):
             print('unable to load saved parameters.')
 
 
-
+# %% NN model
 class RNNCell(PreTrainedModel):
 
     config_class = FinancialConfig
@@ -125,6 +121,100 @@ class RNNCell(PreTrainedModel):
         return self.batch_forward(**data, **kwargs)
 
 
+class SelfAttention(nn.Module):
+
+    def __init__(self, input_size: int, attn_hidden_size: int, num_heads: int = 1, dropout: float = 0.1):
+        super().__init__()
+        self.input_size = input_size
+        self.attn_hidden_size = attn_hidden_size
+        self.num_heads = num_heads
+        self.attn_head_size = int(self.attn_hidden_size / self.num_heads)
+        self.all_head_size = self.num_heads * self.attn_head_size
+        self.query = nn.Linear(self.input_size, self.all_head_size)
+        self.key = nn.Linear(self.input_size, self.all_head_size)
+        self.value = nn.Linear(self.input_size, self.all_head_size)
+        self.downsample = nn.Linear(self.input_size, self.all_head_size) if self.input_size != self.all_head_size else None
+        self.linear = nn.Linear(self.all_head_size, self.all_head_size)
+        self.layer_norm = nn.LayerNorm((self.all_head_size, ))
+        self.dropout = nn.Dropout(dropout)
+
+    def multi_head_transpose(self, x: Tensor) -> Tensor:
+        if self.num_heads == 1:
+            return x
+        shape = x.size()[:-1] + (self.num_heads, self.attn_head_size)
+        x = x.view(shape)
+        return x.permute(0, 2, 1, 3)
+    
+    def forward(self, x: Tensor) -> Tensor:
+        shape = x.size()
+        query_layer = self.multi_head_transpose(self.query(x))
+        key_layer = self.multi_head_transpose(self.key(x))
+        value_layer = self.multi_head_transpose(self.value(x))
+        score = torch.matmul(query_layer, key_layer.transpose(-1, -2))
+        score = F.softmax(score, dim=-1) / self.attn_head_size ** 0.5
+        att = torch.matmul(score, value_layer)
+        if self.num_heads > 1:
+            att = att.permute(0, 2, 1, 3).contiguous().view(shape[:-1] + (self.all_head_size, ))
+        res = x if self.downsample is None else self.downsample(x)
+        out = self.dropout(self.layer_norm(self.linear(att + res)))
+        return out
+
+
+class ARNNCell(PreTrainedModel):
+
+    config_class = FinancialConfig
+
+    def __init__(self, config: PretrainedConfig, device, *inputs, **kwargs):
+        super().__init__(config)
+        self.config = config
+        self.device = device
+
+        rnn_type = config.rnn_type if config.rnn_type is not None else 'gru'
+        rnn_input_size = config.rnn_input_size
+        rnn_hidden_size = config.rnn_hidden_size
+        num_rnn_layers = config.num_rnn_layers
+        bidirectional = config.bidirectional
+        scale = 2 if bidirectional else 1
+        dropout_prob = config.dropout_prob
+
+        if rnn_type == 'gru':
+            rnn_func = nn.GRU
+        elif rnn_type == 'lstm':
+            rnn_func = nn.LSTM
+        else:
+            raise TypeError(f"No RNN module named as {rnn_type}, please provide either 'gru' or 'lstm'.")
+        self.rnn = rnn_func(
+            input_size    = rnn_input_size,
+            hidden_size   = rnn_hidden_size,
+            num_layers    = num_rnn_layers,
+            batch_first   = True,
+            bidirectional = bidirectional
+        )
+        self.attn_net = ...
+        self.batch_norm = nn.BatchNorm1d(rnn_hidden_size * scale)
+        self.dropout = nn.Dropout(p=dropout_prob)
+
+        match_and_load_state_dict(self)
+
+    def batch_forward(self, inputs: Tensor = None, labels: Tensor = None, risks: Tensor = None, ticker: Tensor = None, trade_date: Tensor = None, **kwargs):
+        labels = labels[:, -1].detach()
+        risks = risks[:, -1].detach()
+        hidden, _ = self.rnn(inputs)
+        hidden = self.attn_net(hidden)
+        hidden = self.dropout(self.batch_norm(hidden[:, -1, :]))
+        logits = hidden.mean(dim=-1)
+        risks = risks[:, risks.abs().sum(dim=0) != 0]
+        logits = logits - risks @ torch.linalg.inv(risks.T @ risks) @ risks.T @ logits
+        return {'labels': labels, 'logits': logits, 'hidden': hidden, 'ticker': ticker, 'trade_date': trade_date}
+    
+    def forward(self, data: Dict[str, Tensor] = None, **kwargs):
+        NULL_OUTPUT = {'labels': None, 'logits': None, 'hidden': None, 'ticker': None, 'trade_date': None}
+        if data is None:
+            return NULL_OUTPUT
+        return self.batch_forward(**data, **kwargs)
+
+
+# %% ML model
 class LightGBM:
 
     def __init__(self) -> None:

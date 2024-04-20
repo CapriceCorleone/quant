@@ -1,17 +1,16 @@
 '''
 Author: WangXiang
 Date: 2024-04-18 21:45:34
-LastEditTime: 2024-04-19 21:27:41
+LastEditTime: 2024-04-20 15:25:32
 '''
 
-from typing import Iterable, Optional
+from typing import Optional
 from threading import Thread
 from queue import Empty, Full, Queue
 from multiprocessing.context import SpawnContext
 
 import torch
-from torch.utils.data import Dataset, DataLoader, Sampler
-from torch.utils.data.dataloader import _collate_fn_t, _worker_init_fn_t
+from torch.utils.data import Dataset, DataLoader
 
 
 class ThreadBuffer:
