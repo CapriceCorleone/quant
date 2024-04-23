@@ -43,7 +43,8 @@ def validate_bar(df: pd.DataFrame) -> pd.DataFrame:
     
     # convert ticker code to int and sort
     index_col = ['date', 'time', 'ticker']
-    df['ticker'] = df['ticker'].str[-6:].astype(int)
+    df['wind_code'] = df['wind_code'].str[:6].astype(int)
+    df = df.rename(columns = {'wind_code': 'ticker'})
     df = df.sort_values(['time', 'ticker'])
     
     # drop bad samples
@@ -210,7 +211,7 @@ class MinuteBarFeatureManager:
                 res = result[feature]
                 if isinstance(res, dict):
                     if hf_features[feature] == []:
-                        hf_features[feature] = {f: [] for j in res.keys()}
+                        hf_features[feature] = {f: [] for f in res.keys()}
                     for f in res.keys():
                         hf_features[feature][f].append(res[f])
                 else:
