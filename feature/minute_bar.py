@@ -1,7 +1,7 @@
 '''
 Author: WangXiang
 Date: 2024-04-14 03:06:25
-LastEditTime: 2024-04-20 21:14:47
+LastEditTime: 2024-04-22 21:40:20
 '''
 
 import os
@@ -10,12 +10,12 @@ import pandas as pd
 import multiprocessing as mp
 from tqdm import tqdm
 from pathlib import Path
-from collections import deque, namedtuple
+from typing import Any
 
 from . import formulas
 from .moduletools import ModuleManager
 from .. import conf
-from ..core import DataLoader, Aligner
+from ..core import DataLoader, Aligner, format_unstack_table
 from ..conf.variables import DEVICE_CUPY
 from ..core.loader import MinuteBarLoader
 
@@ -115,6 +115,21 @@ class MinuteBar:
         factor = np.stack((dt, self.tickers, factor))
         return factor.T
     
+    def add_data(self, name: str, data: Any):
+        assert name not in self.storage
+        if isinstance(data, pd.Series):
+            data = data.loc[self.tickers].values
+            if self.cupy:
+                data = cp.array(data)
+        elif isinstance(data, pd.DataFrame):
+            assert len(data) == len(self.time)
+            data = data[self.tickers].values
+            if self.cupy:
+                data = cp.array(data)
+        elif not np.isscalar(data):
+            raise ValueError(f"data must be a pd.Series or pd.DataFrame or scalar, provided is {type(data)}.")
+        self.storage[name] = data
+    
 
 class MinuteBarFeatureManager:
 
@@ -132,8 +147,10 @@ class MinuteBarFeatureManager:
         self.formulas = ModuleManager(formulas)()
         self.cupy = cupy
     
-    def calc_feature_at_date(self, date):
+    def calc_feature_at_date(self, date, variables):
         quote = MinuteBar(self.bar_loader[date])
+        quote = quote.add_data('limit', variables['limit'])
+        quote = quote.add_data('stopping', variables['stopping'])
         result = {}
         for feature in self.feature_list:
             function = self.formulas[feature]
@@ -160,6 +177,11 @@ class MinuteBarFeatureManager:
         pinned_mempool.free_all_blocks()  # 释放CuPy固定内存池中的所有块
     
     def calc_features(self, init_date):
+        dl = DataLoader()
+        AShareEODPrices = dl.load('AShareEODPrices')
+        limit = format_unstack_table(AShareEODPrices.S_DQ_LIMIT.unstack())
+        stopping = format_unstack_table(AShareEODPrices.S_DQ_STOPPING.unstack())
+
         tmp_trade_dates = self.trade_dates[self.trade_dates >= init_date]
         if len(tmp_trade_dates) == 0:
             return
@@ -172,7 +194,8 @@ class MinuteBarFeatureManager:
         if self.num_processes > 1:
             pool = mp.Pool(processes=self.num_processes)
             for dt in trade_days:
-                results.append(pool.apply_async(self.calc_feature_at_date, (dt, ), callback=lambda *args: pbar.update()))
+                variables = {'limit': limit.loc[dt], 'stopping': stopping.loc[dt]}
+                results.append(pool.apply_async(self.calc_feature_at_date, (dt, variables), callback=lambda *args: pbar.update()))
             pool.close()
             pool.join()
             results = [result.get('result') for result in results]
