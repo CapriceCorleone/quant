@@ -33,9 +33,9 @@ class DataProcessor:
     数据处理流程模块
     """
     root = conf.PATH_DATA / 'processed'
-    calendar = Calendar()
-
+    
     def __init__(self, task_list: List, roll_back: int = 20) -> None:
+        self.calendar = Calendar()
         self.task_list = task_list
         os.makedirs(self.root, exist_ok=True)
         self.dl = DataLoader()

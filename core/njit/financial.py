@@ -44,11 +44,32 @@ def get_n_period_within(m, n):
 
 @njit
 def ffunc_last(m):
+    # 相同日期的报告只保留最新的一个
     ann_dt = np.unique(m[:, 0])
     result = np.zeros((len(ann_dt), m.shape[1]), dtype=np.float64)
     for i in range(len(ann_dt)):
         m_within = m[m[:, 0] <= ann_dt[i]]
         result[i] = get_target_period(m_within, m_within[:, 1].max())
+    return result[result[:, 1] > 0]
+
+
+@njit
+def ffunc_last(m):
+    # 相同日期的报告保留所有
+    ann_dt = np.unique(m[:, 0])
+    result = np.zeros((len(ann_dt) * 100, m.shape[1]), dtype=np.float64)
+    j = 0
+    for i in range(len(ann_dt)):
+        m_within = m[m[:, 0] <= ann_dt[i]]
+        m_at = m[m[:, 0] == ann_dt[i]]
+        if len(m_at) <= 1:
+            result[j] = get_target_period(m_within, m_within[:, 1].max())
+            j += 1
+        else:
+            target_periods = np.sort(m_within[:, 1])[-2:]
+            result[j] = get_target_period(m_within, target_periods[0])
+            result[j + 1] = get_target_period(m_within, target_periods[1])
+            j += 2
     return result[result[:, 1] > 0]
 
 

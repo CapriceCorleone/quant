@@ -14,6 +14,9 @@ from .data_processor import *
 from .factor_processor import *
 from .process import *
 from .njit import *
+from .collector import *
+from .query import *
+
 
 __all__ = [
     'aligner',
@@ -25,5 +28,7 @@ __all__ = [
     'data_processor',
     'factor_processor',
     'process',
-    'njit'
+    'njit',
+    'collector',
+    'query'
 ]

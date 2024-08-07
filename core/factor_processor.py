@@ -9,6 +9,7 @@ import pandas as pd
 from numba import njit
 
 from .loader import DataLoader
+from .njit.financial import *
 
 
 @njit
@@ -61,6 +62,7 @@ class FundamentalFactorProcessor:
         data = np.vstack(list(split_data.values()))
         return pd.DataFrame({
             'trade_date': data[:, 0],
+            'report_period': data[:, 1],
             'ticker': np.hstack(codes),
             'factor': data[:, -1]
         })
@@ -93,6 +95,8 @@ class FundamentalFactorProcessor:
         ticker_list = [set(_.keys()) for _ in spilt_financials]
         inter_ticker = sorted(set.intersection(*ticker_list))
         # 将operator应用到每个股票的数据，数据格式通常为[日期，财报日期，数据]
+        # print(ffunc_ttm(*[f['002371.SZ'] for f in spilt_financials]))
+        # print(ffunc_yoy(ffunc_ttm(*[f['002371.SZ'] for f in spilt_financials])))
         result_by_ticker = {
             code: operator(*[f[code] for f in spilt_financials]) for code in inter_ticker
         }
@@ -108,6 +112,7 @@ class FundamentalFactorProcessor:
             # 返回DataFrame
             factor = self.concat_by_ticker(result_by_ticker).dropna()
             factor['trade_date'] = factor['trade_date'].astype(np.int32)
+            factor['report_period'] = factor['report_period'].astype(np.int32)
             return factor
         else:
             # 返回dict
